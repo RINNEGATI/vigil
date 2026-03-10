@@ -1,0 +1,3863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>VIGIL — Live Earth Intelligence</title>
+
+  <script src="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Cesium.js"></script>
+  <link href="https://cesium.com/downloads/cesiumjs/releases/1.114/Build/Cesium/Widgets/widgets.css" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Outfit:wght@300;400;600&display=swap" rel="stylesheet"/>
+
+  <style>
+    :root {
+      --bg: #030810;
+      --panel: rgba(5, 15, 30, 0.85);
+      --border: rgba(0, 200, 255, 0.15);
+      --accent: #00c8ff;
+      --accent2: #ff6b35;
+      --accent3: #39ff14;
+      --text: #c8dff0;
+      --dim: #4a6070;
+      --mono: 'Share Tech Mono', monospace;
+      --sans: 'Outfit', sans-serif;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body { width: 100%; height: 100%; background: var(--bg); overflow: hidden; }
+
+    #cesiumContainer {
+      width: 100%; height: 100%;
+      position: absolute; top: 0; left: 0;
+    }
+
+    /* ── HEADER ── */
+    #header {
+      position: absolute; top: 0; left: 0; right: 0;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 24px;
+      background: linear-gradient(to bottom, rgba(3,8,16,0.95) 0%, transparent 100%);
+      z-index: 300;
+      pointer-events: none; /* globe stays interactive through header bg */
+    }
+
+/* ── SEARCH ──────────────────────────────────────────────────────────────── */
+    #searchWrap {
+      position: relative;
+      pointer-events: all;
+      width: 320px;
+      z-index: 200;
+    }
+    #searchBox {
+      display: flex; align-items: center; gap: 8px;
+      background: rgba(6,16,32,0.85);
+      border: 1px solid rgba(0,200,255,0.25);
+      border-radius: 6px;
+      padding: 7px 12px;
+      transition: border-color 0.2s;
+    }
+    #searchBox:focus-within {
+      border-color: rgba(0,200,255,0.7);
+      box-shadow: 0 0 12px rgba(0,200,255,0.15);
+    }
+    #searchIcon {
+      color: rgba(0,200,255,0.6);
+      font-size: 16px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    #searchInput {
+      flex: 1;
+      background: none; border: none; outline: none;
+      color: #e2e8f0;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      letter-spacing: 0.03em;
+    }
+    #searchInput::placeholder { color: rgba(148,163,184,0.5); }
+    #searchKbd {
+      font-size: 10px;
+      color: rgba(148,163,184,0.4);
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 3px;
+      padding: 2px 5px;
+      font-family: 'Courier New', monospace;
+      flex-shrink: 0;
+      transition: opacity 0.2s;
+    }
+    #searchBox:focus-within #searchKbd { opacity: 0; }
+    #searchResults {
+      position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+      background: rgba(6,16,32,0.97);
+      border: 1px solid rgba(0,200,255,0.2);
+      border-radius: 6px;
+      overflow: hidden;
+      display: none;
+      z-index: 100;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    }
+    #searchResults.visible { display: block; }
+    .search-result {
+      padding: 9px 14px;
+      cursor: pointer;
+      display: flex; flex-direction: column; gap: 2px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      transition: background 0.1s;
+    }
+    .search-result:last-child { border-bottom: none; }
+    .search-result:hover, .search-result.active {
+      background: rgba(0,200,255,0.1);
+    }
+    .result-name {
+      color: #e2e8f0;
+      font-size: 13px;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 0.02em;
+    }
+    .result-type {
+      color: rgba(0,200,255,0.6);
+      font-size: 10px;
+      font-family: 'Courier New', monospace;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .search-empty {
+      padding: 12px 14px;
+      color: rgba(148,163,184,0.5);
+      font-size: 12px;
+      font-family: 'Courier New', monospace;
+      text-align: center;
+    }
+
+    /* Re-enable pointer events on interactive header children */
+    #logo, #clockBar, #tzMenuBtn, #worldClocks, .tz-block {
+      pointer-events: all;
+    }
+
+    #logo {
+      font-family: var(--mono);
+      font-size: 22px;
+      letter-spacing: 6px;
+      color: #fff;
+      text-shadow: 0 0 20px var(--accent), 0 0 40px rgba(0,200,255,0.3);
+    }
+
+    #logo span { color: var(--accent); }
+
+    /* ── WORLD CLOCKS ── */
+    #clockBar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    #worldClocks {
+      display: flex;
+      align-items: stretch;
+      gap: 1px;
+      background: rgba(0,200,255,0.08);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    .tz-block {
+      padding: 7px 15px;
+      text-align: center;
+      background: var(--panel);
+      cursor: grab;
+      transition: background 0.15s, opacity 0.15s;
+      position: relative;
+      min-width: 80px;
+    }
+
+    .tz-block:hover { background: rgba(0,200,255,0.1); }
+    .tz-block.dragging { opacity: 0.35; cursor: grabbing; }
+    .tz-block.drag-over { background: rgba(0,200,255,0.18); }
+
+    .tz-block + .tz-block::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 20%; height: 60%;
+      width: 1px;
+      background: var(--border);
+    }
+
+    .tz-city {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: var(--dim);
+      text-transform: uppercase;
+      margin-bottom: 3px;
+    }
+
+    .tz-time {
+      font-family: var(--mono);
+      font-size: 15px;
+      color: var(--accent);
+      letter-spacing: 1px;
+      line-height: 1;
+    }
+
+    .tz-time.utc { color: #fff; }
+
+    .tz-date {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--dim);
+      margin-top: 2px;
+    }
+
+    /* ── TZ DROPDOWN BUTTON ── */
+    #tzMenuBtn {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--dim);
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 2px;
+      padding: 7px 12px;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+      white-space: nowrap;
+      pointer-events: all;
+    }
+    #tzMenuBtn:hover { background: rgba(0,200,255,0.1); color: var(--accent); }
+
+    /* ── TZ DROPDOWN PANEL ── */
+    #tzDropdown {
+      position: absolute;
+      top: 60px;
+      right: 20px;
+      width: 240px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      backdrop-filter: blur(14px);
+      z-index: 50;
+      display: none;
+      overflow: hidden;
+    }
+    #tzDropdown.open { display: block; }
+
+    #tzDropdown .dd-title {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 3px;
+      color: var(--dim);
+      padding: 10px 14px 8px;
+      border-bottom: 1px solid var(--border);
+      text-transform: uppercase;
+    }
+
+    .dd-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 9px 14px;
+      cursor: pointer;
+      border-bottom: 1px solid rgba(0,200,255,0.04);
+      transition: background 0.15s;
+    }
+    .dd-row:last-child { border-bottom: none; }
+    .dd-row:hover { background: rgba(0,200,255,0.07); }
+
+    .dd-label {
+      font-family: var(--sans);
+      font-size: 12px;
+      color: var(--text);
+    }
+
+    .dd-offset {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--dim);
+      flex: 1;
+      text-align: right;
+      margin-right: 10px;
+    }
+
+    .dd-check {
+      width: 14px; height: 14px;
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 9px;
+      color: var(--accent);
+      transition: background 0.15s;
+      flex-shrink: 0;
+    }
+    .dd-row.checked .dd-check {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #000;
+    }
+
+    /* ── LAYER PANEL ── */
+    #layerPanel {
+      position: absolute;
+      top: 80px; left: 20px;
+      width: 220px;
+      max-height: calc(100vh - 120px);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      backdrop-filter: blur(12px);
+      z-index: 10;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #layerPanelScrollable {
+      overflow-y: auto;
+      flex: 1;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(0,200,255,0.3) transparent;
+    }
+    #layerPanelScrollable::-webkit-scrollbar { width: 4px; }
+    #layerPanelScrollable::-webkit-scrollbar-thumb { background: rgba(0,200,255,0.3); border-radius: 2px; }
+    #layerPanelScrollable::-webkit-scrollbar-track { background: transparent; }
+
+    #layerPanel .panel-title {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 3px;
+      color: var(--dim);
+      padding: 8px 12px 6px;
+      border-bottom: 1px solid var(--border);
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    #toggleAllBtn {
+      display: flex; align-items: center; gap: 5px;
+      background: none; border: none; cursor: pointer;
+      font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em;
+      color: var(--dim); text-transform: uppercase;
+      padding: 0; transition: color 0.2s;
+    }
+    #toggleAllBtn:hover { color: var(--accent); }
+    #toggleAllBtn .mini-toggle {
+      width: 22px; height: 11px;
+      background: var(--accent);
+      border-radius: 6px; position: relative; transition: background 0.3s; flex-shrink: 0;
+    }
+    #toggleAllBtn .mini-toggle.off { background: rgba(0,200,255,0.15); }
+    #toggleAllBtn .mini-toggle::after {
+      content: ''; width: 7px; height: 7px; background: #fff; border-radius: 50%;
+      position: absolute; top: 2px; left: 2px; transition: transform 0.3s;
+    }
+    #toggleAllBtn .mini-toggle.off::after { transform: none; }
+    #toggleAllBtn .mini-toggle:not(.off)::after { transform: translateX(11px); }
+
+    .layer-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 6px 12px;
+      cursor: pointer;
+      transition: background 0.2s;
+      border-bottom: 1px solid rgba(0,200,255,0.05);
+    }
+
+    .layer-row:hover { background: rgba(0,200,255,0.05); }
+
+    .layer-left {
+      display: flex; align-items: center; gap: 10px;
+    }
+
+    .layer-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .layer-name {
+      font-family: var(--sans);
+      font-size: 12px;
+      color: var(--text);
+      font-weight: 300;
+    }
+
+    .layer-count {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--dim);
+      min-width: 36px;
+      text-align: right;
+    }
+
+    .toggle {
+      width: 26px; height: 13px;
+      background: rgba(0,200,255,0.15);
+      border-radius: 8px;
+      position: relative;
+      transition: background 0.3s;
+      flex-shrink: 0;
+      margin-left: 6px;
+    }
+
+    .toggle.on { background: var(--accent); }
+
+    .toggle::after {
+      content: '';
+      width: 8px; height: 8px;
+      background: #fff;
+      border-radius: 50%;
+      position: absolute;
+      top: 2.5px; left: 2.5px;
+      transition: transform 0.3s;
+    }
+
+    .toggle.on::after { transform: translateX(13px); }
+
+    /* ── SUBLAYER ── */
+    .sublayer-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 4px 12px 4px 28px;
+      cursor: pointer;
+      transition: background 0.2s;
+      border-bottom: 1px solid rgba(0,200,255,0.04);
+      background: rgba(0,0,0,0.15);
+    }
+    .sublayer-row:hover { background: rgba(0,200,255,0.04); }
+
+    .sublayer-left {
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    .sublayer-dash {
+      width: 12px; height: 1px;
+      background: rgba(0,200,255,0.3);
+      flex-shrink: 0;
+    }
+
+    .sublayer-name {
+      font-family: var(--sans);
+      font-size: 11px;
+      color: var(--dim);
+      font-weight: 300;
+    }
+
+    .sublayer-toggle {
+      width: 26px; height: 13px;
+      background: rgba(0,200,255,0.12);
+      border-radius: 7px;
+      position: relative;
+      transition: background 0.3s;
+      flex-shrink: 0;
+    }
+    .sublayer-toggle.on { background: rgba(0,200,255,0.5); }
+    .sublayer-toggle::after {
+      content: '';
+      width: 8px; height: 8px;
+      background: #fff;
+      border-radius: 50%;
+      position: absolute;
+      top: 2.5px; left: 2.5px;
+      transition: transform 0.3s;
+    }
+    .sublayer-toggle.on::after { transform: translateX(13px); }
+
+    /* ── MAP STYLE PANEL ── */
+    #mapStylePanel {
+      position: absolute;
+      top: 80px; left: 20px;
+      width: 220px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      backdrop-filter: blur(12px);
+      z-index: 10;
+      overflow: hidden;
+    }
+
+    #mapStylePanel .panel-title {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 3px;
+      color: var(--dim);
+      padding: 12px 16px 8px;
+      border-bottom: 1px solid var(--border);
+      text-transform: uppercase;
+    }
+
+    .style-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 16px;
+      cursor: pointer;
+      transition: background 0.2s;
+      border-bottom: 1px solid rgba(0,200,255,0.05);
+    }
+    .style-row:last-child { border-bottom: none; }
+    .style-row:hover { background: rgba(0,200,255,0.06); }
+    .style-row.active { background: rgba(0,200,255,0.1); }
+
+    .style-swatch {
+      width: 30px; height: 18px;
+      border-radius: 3px;
+      border: 1px solid rgba(255,255,255,0.12);
+      flex-shrink: 0;
+    }
+
+    .style-name {
+      font-family: var(--sans);
+      font-size: 12px;
+      color: var(--text);
+      font-weight: 300;
+      flex: 1;
+    }
+
+    .style-check {
+      font-size: 9px;
+      color: var(--accent);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .style-row.active .style-check { opacity: 1; }
+
+    /* ── STATS BAR ── */
+    #statsBar {
+      position: absolute;
+      bottom: 24px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      backdrop-filter: blur(12px);
+      z-index: 10;
+    }
+
+    .stat-block {
+      background: var(--panel);
+      padding: 10px 20px;
+      text-align: center;
+    }
+
+    .stat-val {
+      font-family: var(--mono);
+      font-size: 18px;
+      color: var(--accent);
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-family: var(--sans);
+      font-size: 10px;
+      color: var(--dim);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-top: 3px;
+    }
+
+    /* ── INFO CARD ── */
+    #infoCard {
+      position: absolute;
+      top: 80px; right: 20px;
+      width: 240px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      backdrop-filter: blur(12px);
+      z-index: 10;
+      display: none;
+      overflow: hidden;
+    }
+
+    #infoCard.visible { display: block; }
+
+    #infoCard .card-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    #infoCard .card-type {
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 3px;
+      color: var(--dim);
+      text-transform: uppercase;
+    }
+
+    #infoCard .card-close {
+      font-family: var(--mono);
+      font-size: 14px;
+      color: var(--dim);
+      cursor: pointer;
+      background: none;
+      border: none;
+      color: var(--dim);
+      line-height: 1;
+    }
+
+    #infoCard .card-close:hover { color: var(--accent); }
+
+    #infoCard .card-body {
+      padding: 12px 14px;
+    }
+
+    #infoCard .card-name {
+      font-family: var(--sans);
+      font-size: 15px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 10px;
+    }
+
+    .card-field {
+      display: flex; justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .card-field-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .card-field-value {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text);
+    }
+
+    /* ── LOADING ── */
+    #loadScreen {
+      position: absolute; inset: 0;
+      background: var(--bg);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 100;
+      transition: opacity 0.8s;
+    }
+
+    #loadScreen.hidden { opacity: 0; pointer-events: none; }
+
+    #loadLogo {
+      font-family: var(--mono);
+      font-size: 36px;
+      letter-spacing: 10px;
+      color: #fff;
+      text-shadow: 0 0 30px var(--accent);
+      margin-bottom: 8px;
+    }
+
+    #loadLogo span { color: var(--accent); }
+
+    #loadSub {
+      font-family: var(--sans);
+      font-size: 12px;
+      color: var(--dim);
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      margin-bottom: 40px;
+    }
+
+    #loadBar {
+      width: 200px; height: 1px;
+      background: rgba(0,200,255,0.15);
+      position: relative; overflow: hidden;
+    }
+
+    #loadBar::after {
+      content: '';
+      position: absolute;
+      top: 0; left: -100%; width: 100%; height: 100%;
+      background: var(--accent);
+      animation: loadSlide 1.8s ease-in-out infinite;
+    }
+
+    @keyframes loadSlide {
+      0% { left: -100%; }
+      100% { left: 100%; }
+    }
+
+    #loadStatus {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--dim);
+      margin-top: 14px;
+      letter-spacing: 2px;
+    }
+
+    /* ── CESIUM UI OVERRIDES ── */
+    .cesium-widget-credits { display: none !important; }
+    .cesium-viewer-toolbar { display: none !important; }
+    .cesium-viewer-animationContainer { display: none !important; }
+    .cesium-viewer-timelineContainer { display: none !important; }
+    .cesium-viewer-bottom { display: none !important; }
+
+    /* scan line overlay */
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.03) 2px,
+        rgba(0,0,0,0.03) 4px
+      );
+      pointer-events: none;
+      z-index: 200;
+    }
+    /* ── WEBCAM VIEWER MODAL ── */
+    #webcamModal {
+      display: none; position: fixed; inset: 0; z-index: 500;
+      align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.78); backdrop-filter: blur(6px);
+    }
+    #webcamModal.visible { display: flex; }
+    #webcamBox {
+      background: var(--panel); border: 1px solid var(--border);
+      border-radius: 6px; overflow: hidden;
+      width: min(860px, 92vw);
+      box-shadow: 0 0 60px rgba(0,200,255,0.12);
+      display: flex; flex-direction: column;
+    }
+    #webcamModalHeader {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    #webcamModalTitle {
+      font-family: var(--sans); font-size: 14px; font-weight: 600; color: #fff;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 760px;
+    }
+    #webcamModalClose {
+      background: none; border: none; color: var(--dim);
+      font-size: 18px; cursor: pointer; line-height: 1; flex-shrink: 0; margin-left: 12px;
+    }
+    #webcamModalClose:hover { color: var(--accent); }
+    #webcamModalMeta {
+      font-family: var(--mono); font-size: 10px; color: var(--dim);
+      letter-spacing: 0.07em; padding: 5px 16px;
+      border-bottom: 1px solid var(--border); flex-shrink: 0;
+    }
+    #webcamFrame { width: 100%; aspect-ratio: 16/9; border: none; background: #000; display: block; }
+    #webcamFallback { display: none; width: 100%; aspect-ratio: 16/9; object-fit: cover; background: #000; }
+
+    /* ── RADIO PLAYER MODAL ── */
+    #radioPlayerInCard {
+      margin-top: 10px;
+      border-top: 1px solid rgba(167,139,250,0.2);
+      padding-top: 10px;
+    }
+    #radioVisualizer {
+      width: 100%; height: 40px;
+      display: flex; align-items: flex-end; justify-content: center; gap: 3px;
+      margin-bottom: 10px;
+    }
+    #radioVisualizer .bar {
+      width: 4px; background: #a78bfa; border-radius: 2px;
+      animation: radioBar 0.8s ease-in-out infinite alternate;
+      transform-origin: bottom;
+    }
+    @keyframes radioBar {
+      from { height: 4px; opacity: 0.4; }
+      to   { height: 100%; opacity: 1; }
+    }
+    #radioVisualizer.paused .bar { animation-play-state: paused; height: 4px; opacity: 0.3; }
+    #radioControls {
+      display: flex; gap: 10px; align-items: center;
+    }
+    #radioPlayBtn {
+      width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+      background: rgba(167,139,250,0.15); border: 1px solid #a78bfa;
+      color: #a78bfa; font-size: 15px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.2s;
+    }
+    #radioPlayBtn:hover { background: rgba(167,139,250,0.3); }
+    #radioStatus {
+      font-family: var(--mono); font-size: 10px; color: var(--dim);
+      letter-spacing: 0.1em; text-transform: uppercase;
+    }
+
+    /* ── SCREENSAVER MODE ── */
+    #screensaverHint {
+      position: fixed; bottom: 36px; left: 50%; transform: translateX(-50%);
+      font-family: var(--mono); font-size: 11px; letter-spacing: 0.2em;
+      color: rgba(0,200,255,0.45); text-transform: uppercase;
+      pointer-events: none; z-index: 400;
+      opacity: 1; transition: opacity 1.2s ease;
+    }
+    #screensaverHint.hidden { opacity: 0; }
+
+    /* UI panels fade in/out as a group */
+    #header, #mapStylePanel, #layerPanel, #infoCard, #statsBar {
+      transition: opacity 0.8s ease;
+    }
+    body.screensaver #header,
+    body.screensaver #mapStylePanel,
+    body.screensaver #layerPanel,
+    body.screensaver #infoCard,
+    body.screensaver #statsBar {
+      opacity: 0;
+      pointer-events: none !important;
+    }
+  </style>
+</head>
+<body class="screensaver">
+
+<!-- Screensaver click-to-enter hint -->
+<div id="screensaverHint">Click anywhere to begin</div>
+
+<!-- Loading screen -->
+<div id="loadScreen">
+  <div id="loadLogo">VIG<span>I</span>L</div>
+  <div id="loadSub">Live Earth Intelligence</div>
+  <div id="loadBar"></div>
+  <div id="loadStatus">Initializing globe...</div>
+</div>
+
+<div id="cesiumContainer"></div>
+
+<!-- Header -->
+<div id="header">
+  <div id="logo">VIG<span>I</span>L</div>
+
+  <!-- Search -->
+  <div id="searchWrap">
+    <div id="searchBox">
+      <span id="searchIcon">⌕</span>
+      <input id="searchInput" type="text" placeholder="Search places, flights, ships…" autocomplete="off" spellcheck="false" />
+      <kbd id="searchKbd">⌘K</kbd>
+    </div>
+    <div id="searchResults"></div>
+  </div>
+
+  <div id="clockBar">
+    <div id="worldClocks"><!-- rendered by JS --></div>
+    <button id="tzMenuBtn" onclick="toggleTzDropdown(event)">+ ZONES</button>
+  </div>
+</div>
+
+<!-- TZ Dropdown -->
+<div id="tzDropdown">
+  <div class="dd-title">Time Zones</div>
+  <!-- rows rendered by JS -->
+</div>
+
+<!-- Map style panel -->
+<div id="mapStylePanel">
+  <div class="panel-title">Map Style</div>
+  <div class="style-row active" id="style-night" onclick="setMapStyle('night')">
+    <div class="style-swatch" style="background:linear-gradient(135deg,#111 0%,#1a1a1a 50%,#222 100%);"></div>
+    <span class="style-name">Minimal Dark</span>
+    <span class="style-check">✦</span>
+  </div>
+  <div class="style-row" id="style-satellite" onclick="setMapStyle('satellite')">
+    <div class="style-swatch" style="background:linear-gradient(135deg,#2d5a1b,#1a3a5c,#0a1a0a);"></div>
+    <span class="style-name">Satellite</span>
+    <span class="style-check">✦</span>
+  </div>
+  <div class="style-row" id="style-terrain" onclick="setMapStyle('terrain')">
+    <div class="style-swatch" style="background:linear-gradient(135deg,#4a7c59,#8b7355,#2a5298);"></div>
+    <span class="style-name">Terrain</span>
+    <span class="style-check">✦</span>
+  </div>
+  <div class="style-row" id="style-bing" onclick="setMapStyle('bing')">
+    <div class="style-swatch" style="background:linear-gradient(135deg,#1c3a5e,#0a1f35);"></div>
+    <span class="style-name">Dark Aerial</span>
+    <span class="style-check">✦</span>
+  </div>
+</div>
+
+<!-- Layer panel -->
+<div id="layerPanel" style="top:284px;">
+  <div class="panel-title">Data Layers<button id="toggleAllBtn" onclick="toggleAllLayers()" title="Toggle all layers"><span id="toggleAllLabel">ALL ON</span><div class="mini-toggle" id="toggleAllIndicator"></div></button></div>
+  <div id="layerPanelScrollable">
+
+  <div class="layer-row" id="row-flights" onclick="toggleLayer('flights')">
+    <div class="layer-left">
+      <div class="layer-dot" style="background:#00c8ff; box-shadow: 0 0 6px #00c8ff;"></div>
+      <span class="layer-name">Flights</span>
+    </div>
+    <span class="layer-count" id="count-flights">—</span>
+    <div class="toggle on" id="toggle-flights"></div>
+  </div>
+
+  <div class="sublayer-row" id="row-flightpaths" onclick="toggleSubLayer('flightpaths')">
+    <div class="sublayer-left">
+      <div class="sublayer-dash"></div>
+      <span class="sublayer-name">Flight Paths</span>
+    </div>
+    <div class="sublayer-toggle on" id="toggle-flightpaths"></div>
+  </div>
+
+  <div class="layer-row" id="row-satellites" onclick="toggleLayer('satellites')">
+    <div class="layer-left">
+      <div class="layer-dot" style="background:#39ff14; box-shadow: 0 0 6px #39ff14;"></div>
+      <span class="layer-name">Satellites</span>
+    </div>
+    <span class="layer-count" id="count-satellites">—</span>
+    <div class="toggle on" id="toggle-satellites"></div>
+  </div>
+
+  <div class="sublayer-row" id="row-satpaths" onclick="toggleSubLayer('satpaths')">
+    <div class="sublayer-left">
+      <div class="sublayer-dash"></div>
+      <span class="sublayer-name">Orbit Paths</span>
+    </div>
+    <div class="sublayer-toggle on" id="toggle-satpaths"></div>
+  </div>
+
+  <div class="layer-row" id="row-ships" onclick="toggleLayer('ships')">
+    <div class="layer-left">
+      <div class="layer-dot" style="background:#ff6b35; box-shadow: 0 0 6px #ff6b35;"></div>
+      <span class="layer-name">Ships</span>
+    </div>
+    <span class="layer-count" id="count-ships">—</span>
+    <div class="toggle on" id="toggle-ships"></div>
+  </div>
+
+  <div class="layer-row" id="row-weather" onclick="toggleLayer('weather')">
+    <div class="layer-left">
+      <div class="layer-dot" style="background:#a78bfa; box-shadow: 0 0 6px #a78bfa;"></div>
+      <span class="layer-name">Weather Radar</span>
+    </div>
+    <span class="layer-count" id="count-weather"></span>
+    <div class="toggle on" id="toggle-weather"></div>
+  </div>
+
+  <div class="layer-row" id="row-roads" onclick="toggleLayer('roads')">
+    <div class="layer-left">
+      <div class="layer-dot" style="background:#94a3b8; box-shadow: 0 0 6px #94a3b8;"></div>
+      <span class="layer-name">Roads</span>
+    </div>
+    <span class="layer-count" id="count-roads"></span>
+    <div class="toggle" id="toggle-roads"></div>
+  </div>
+
+  <div class="layer-row" id="row-events" onclick="toggleLayer('events')">
+    <div class="layer-left">
+      <div class="layer-dot" style="background:#c084fc; box-shadow: 0 0 6px #c084fc;"></div>
+      <span class="layer-name">News Events</span>
+    </div>
+    <span class="layer-count" id="count-events">—</span>
+    <div class="toggle on" id="toggle-events"></div>
+  </div>
+
+
+
+  <div class="layer-row" id="row-cables" onclick="toggleLayer('cables')">
+    <div class="layer-left">
+      <div class="layer-dot" style="background:#38bdf8; box-shadow: 0 0 6px #38bdf8;"></div>
+      <span class="layer-name">Submarine Cables</span>
+    </div>
+    <span class="layer-count" id="count-cables">—</span>
+    <div class="toggle on" id="toggle-cables"></div>
+  </div>
+
+  <div class="layer-row" id="row-wildfires" onclick="toggleLayer('wildfires')">
+    <div class="layer-left">
+      <div class="layer-dot" style="background:#ff4500; box-shadow: 0 0 6px #ff4500;"></div>
+      <span class="layer-name">Wildfires</span>
+    </div>
+    <span class="layer-count" id="count-wildfires">—</span>
+    <div class="toggle on" id="toggle-wildfires"></div>
+  </div>
+
+  <div class="layer-row" id="row-datacenters" onclick="toggleLayer('datacenters')">
+    <div class="layer-left">
+      <div class="layer-dot" style="background:#818cf8; box-shadow: 0 0 8px #818cf8;"></div>
+      <span class="layer-name">Data Centers</span>
+    </div>
+    <span class="layer-count" id="count-datacenters">—</span>
+    <div class="toggle on" id="toggle-datacenters"></div>
+  </div>
+
+  <div class="layer-row" id="row-nuclear" onclick="toggleLayer('nuclear')">
+    <div class="layer-left">
+      <div class="layer-dot" style="background:#4ade80; box-shadow: 0 0 8px #4ade80;"></div>
+      <span class="layer-name">Nuclear</span>
+    </div>
+    <span class="layer-count" id="count-nuclear">—</span>
+    <div class="toggle on" id="toggle-nuclear"></div>
+  </div>
+
+  <div class="layer-row" id="row-faults" onclick="toggleLayer('faults')">
+    <div class="layer-left">
+      <div class="layer-dot" style="background:#ef4444; box-shadow: 0 0 6px #ef4444;"></div>
+      <span class="layer-name">Fault Lines</span>
+    </div>
+    <span class="layer-count" id="count-faults">—</span>
+    <div class="toggle on" id="toggle-faults"></div>
+  </div>
+
+  <div class="layer-row" id="row-powerplants" onclick="toggleLayer('powerplants')">
+    <div class="layer-left">
+      <div class="layer-dot" style="background:#facc15; box-shadow: 0 0 6px #facc15;"></div>
+      <span class="layer-name">Power Plants</span>
+    </div>
+    <span class="layer-count" id="count-powerplants">—</span>
+    <div class="toggle on" id="toggle-powerplants"></div>
+  </div>
+
+  <div class="layer-row" id="row-quakes" onclick="toggleLayer('quakes')">
+    <div class="layer-left">
+      <div class="layer-dot" style="background:#f5c518; box-shadow: 0 0 6px #f5c518;"></div>
+      <span class="layer-name">Earthquakes</span>
+    </div>
+    <span class="layer-count" id="count-quakes">—</span>
+    <div class="toggle on" id="toggle-quakes"></div>
+  </div>
+
+  <div class="layer-row" id="row-buoys" onclick="toggleLayer('buoys')">
+    <div class="layer-left">
+      <div class="layer-dot" style="background:#00e5ff; box-shadow: 0 0 6px #00e5ff;"></div>
+      <span class="layer-name">Buoys</span>
+    </div>
+    <span class="layer-count" id="count-buoys">—</span>
+    <div class="toggle on" id="toggle-buoys"></div>
+  </div>
+
+  <div class="layer-row" id="row-webcams" onclick="toggleLayer('webcams')">
+    <div class="layer-left">
+      <div class="layer-dot" style="background:#f472b6; box-shadow: 0 0 6px #f472b6;"></div>
+      <span class="layer-name">Webcams</span>
+    </div>
+    <span class="layer-count" id="count-webcams">—</span>
+    <div class="toggle on" id="toggle-webcams"></div>
+  </div>
+  <div class="layer-row" id="row-radio" onclick="toggleLayer('radio')">
+    <div class="layer-left">
+      <div class="layer-dot" style="background:#a78bfa; box-shadow: 0 0 6px #a78bfa;"></div>
+      <span class="layer-name">Radio</span>
+    </div>
+    <span class="layer-count" id="count-radio">—</span>
+    <div class="toggle on" id="toggle-radio"></div>
+  </div>
+  </div><!-- end layerPanelScrollable -->
+</div>
+
+<!-- Info card -->
+<div id="infoCard">
+  <div class="card-header">
+    <span class="card-type" id="cardType">AIRCRAFT</span>
+    <button class="card-close" onclick="closeCard()">✕</button>
+  </div>
+  <div id="trackingBanner" style="display:none;padding:5px 14px;background:rgba(0,200,255,0.08);border-bottom:1px solid rgba(0,200,255,0.2);font-family:var(--mono);font-size:9px;color:#00c8ff;letter-spacing:0.1em;text-align:center;">
+    ⊙ TRACKING
+  </div>
+  <div class="card-body">
+    <div class="card-name" id="cardName">—</div>
+    <div id="cardFields"></div>
+    <button id="trackBtn" style="display:none;margin-top:8px;padding:4px 10px;background:rgba(0,200,255,0.15);border:1px solid #00c8ff;border-radius:4px;color:#00c8ff;font-family:var(--mono);font-size:10px;letter-spacing:0.08em;cursor:pointer;width:100%;">⊙ TRACK</button>
+  </div>
+</div>
+
+<!-- Stats bar -->
+<div id="statsBar">
+  <div class="stat-block">
+    <div class="stat-val" id="stat-flights">—</div>
+    <div class="stat-label">Flights</div>
+  </div>
+  <div class="stat-block">
+    <div class="stat-val" id="stat-sats">—</div>
+    <div class="stat-label">Satellites</div>
+  </div>
+  <div class="stat-block">
+    <div class="stat-val" id="stat-ships">—</div>
+    <div class="stat-label">Vessels</div>
+  </div>
+</div>
+
+<!-- Webcam viewer modal -->
+<div id="webcamModal" onclick="if(event.target===this)closeWebcamModal()">
+  <div id="webcamBox">
+    <div id="webcamModalHeader">
+      <span id="webcamModalTitle">—</span>
+      <button id="webcamModalClose" onclick="closeWebcamModal()">✕</button>
+    </div>
+    <div id="webcamModalMeta">—</div>
+    <iframe id="webcamFrame" allowfullscreen allow="autoplay; encrypted-media"></iframe>
+    <img id="webcamFallback" />
+  </div>
+</div>
+
+<!-- Radio player modal -->
+<audio id="radioAudio" preload="none" style="display:none"></audio>
+
+<!-- satellite.js for TLE propagation -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/satellite.js/4.0.0/satellite.min.js"></script>
+
+<script>
+// ── CONFIG ──────────────────────────────────────────────────────────────────
+// Replace with your own keys — all have generous free tiers
+const CESIUM_TOKEN = 'YOUR_CESIUM_ION_TOKEN'; // https://ion.cesium.com
+// AIS key is handled server-side in proxy.js
+// OpenSky — no key needed for basic access (rate limited to ~1 req/10s)
+// RainViewer — no key needed
+
+// ── CESIUM INIT ──────────────────────────────────────────────────────────────
+Cesium.Ion.defaultAccessToken = CESIUM_TOKEN;
+
+const viewer = new Cesium.Viewer('cesiumContainer', {
+  baseLayerPicker: false,
+  geocoder: false,
+  homeButton: false,
+  sceneModePicker: false,
+  navigationHelpButton: false,
+  animation: false,
+  timeline: false,
+  fullscreenButton: false,
+  infoBox: false,
+  selectionIndicator: false,
+  shadows: false,
+  terrainShadows: Cesium.ShadowMode.DISABLED,
+});
+
+// Set clock to current real time and start ticking
+viewer.clock.currentTime = Cesium.JulianDate.now();
+viewer.clock.multiplier = 1;
+viewer.clock.shouldAnimate = true;
+
+viewer.scene.globe.enableLighting = true;
+viewer.scene.globe.showGroundAtmosphere = true;
+viewer.scene.skyAtmosphere.show = true;
+viewer.scene.backgroundColor = Cesium.Color.fromCssColorString('#030810');
+viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#0a1628');
+
+// ── SCREENSAVER MODE ──────────────────────────────────────────────────────────
+let screensaverActive = true;
+let spinRemoveListener = null;
+
+function startSpin() {
+  // Slow counterclockwise rotation via postRender
+  const SPIN_RATE = -0.35; // degrees/second, negative = counterclockwise
+  let lastTime = null;
+  spinRemoveListener = viewer.scene.postRender.addEventListener((scene, time) => {
+    if (!screensaverActive) return;
+    const now = Cesium.JulianDate.toDate(time).getTime();
+    if (lastTime === null) { lastTime = now; return; }
+    const dt = (now - lastTime) / 1000;
+    lastTime = now;
+    viewer.scene.camera.rotateRight(Cesium.Math.toRadians(SPIN_RATE * dt));
+  });
+}
+
+function wakeFromScreensaver() {
+  if (!screensaverActive) return;
+  screensaverActive = false;
+
+  // Stop spin
+  if (spinRemoveListener) { spinRemoveListener(); spinRemoveListener = null; }
+
+  // Fade out hint
+  const hint = document.getElementById('screensaverHint');
+  hint.classList.add('hidden');
+  setTimeout(() => hint.style.display = 'none', 1400);
+
+  // Fade in UI
+  document.body.classList.remove('screensaver');
+}
+
+// Start spinning immediately
+startSpin();
+
+// Wake on any click or keypress
+document.addEventListener('click', wakeFromScreensaver, { once: true });
+document.addEventListener('keydown', wakeFromScreensaver, { once: true });
+
+// Darken imagery natively via layer properties — no shader needed
+// Applied after the layer is added below
+
+// Imagery applied async inside init() — see initGlobe() below
+
+// ── LAYER STATE ──────────────────────────────────────────────────────────────
+const layers = { flights: true, satellites: true, ships: true, weather: true, wildfires: true, quakes: true, events: true, cables: true, faults: true, nuclear: true, datacenters: true, powerplants: true, roads: false, buoys: true, webcams: true, radio: true };
+const sublayers = { flightpaths: true, satpaths: true }; // on by default
+const dataSources = {
+  flights: viewer.entities,   // we use entities directly for simplicity
+};
+
+// Separate entity collections per layer
+const flightEntities = [];
+const flightPathEntities = [];
+const satelliteEntities = [];
+const shipEntities = [];
+let weatherLayer = null;
+let roadsLayer = null;
+
+// ── CLOCK ─────────────────────────────────────────────────────────────────────
+// ── WORLD CLOCKS ─────────────────────────────────────────────────────────────
+const ALL_ZONES = [
+  { id: 'UTC',  city: 'UTC',         tz: 'UTC',                    utcOffset: '+0' },
+  { id: 'NYC',  city: 'New York',    tz: 'America/New_York',       utcOffset: '-5' },
+  { id: 'SAO',  city: 'São Paulo',   tz: 'America/Sao_Paulo',      utcOffset: '-3' },
+  { id: 'LON',  city: 'London',      tz: 'Europe/London',          utcOffset: '+0' },
+  { id: 'PAR',  city: 'Paris',       tz: 'Europe/Paris',           utcOffset: '+1' },
+  { id: 'CAI',  city: 'Cairo',       tz: 'Africa/Cairo',           utcOffset: '+2' },
+  { id: 'DXB',  city: 'Dubai',       tz: 'Asia/Dubai',             utcOffset: '+4' },
+  { id: 'KHI',  city: 'Karachi',     tz: 'Asia/Karachi',           utcOffset: '+5' },
+  { id: 'DEL',  city: 'Delhi',       tz: 'Asia/Kolkata',           utcOffset: '+5:30' },
+  { id: 'BKK',  city: 'Bangkok',     tz: 'Asia/Bangkok',           utcOffset: '+7' },
+  { id: 'SGP',  city: 'Singapore',   tz: 'Asia/Singapore',         utcOffset: '+8' },
+  { id: 'HKG',  city: 'Hong Kong',   tz: 'Asia/Hong_Kong',         utcOffset: '+8' },
+  { id: 'TYO',  city: 'Tokyo',       tz: 'Asia/Tokyo',             utcOffset: '+9' },
+  { id: 'SYD',  city: 'Sydney',      tz: 'Australia/Sydney',       utcOffset: '+11' },
+  { id: 'LAX',  city: 'Los Angeles', tz: 'America/Los_Angeles',    utcOffset: '-8' },
+  { id: 'CHI',  city: 'Chicago',     tz: 'America/Chicago',        utcOffset: '-6' },
+  { id: 'MEX',  city: 'Mexico City', tz: 'America/Mexico_City',    utcOffset: '-6' },
+  { id: 'MOS',  city: 'Moscow',      tz: 'Europe/Moscow',          utcOffset: '+3' },
+];
+
+// Active zones (ordered) — default set
+let activeZones = ['UTC','NYC','LON','DXB','SGP','TYO','LAX'];
+
+// ── DRAG STATE ───────────────────────────────────────────────────────────────
+let dragSrcId = null;
+
+function renderClocks() {
+  const bar = document.getElementById('worldClocks');
+  bar.innerHTML = '';
+  activeZones.forEach(id => {
+    const zone = ALL_ZONES.find(z => z.id === id);
+    if (!zone) return;
+    const isUtc = id === 'UTC';
+    const block = document.createElement('div');
+    block.className = 'tz-block';
+    block.dataset.id = id;
+    block.draggable = true;
+    block.innerHTML = `
+      <div class="tz-city">${zone.city}</div>
+      <div class="tz-time${isUtc ? ' utc' : ''}" id="tz-${id}">--:--:--</div>
+      <div class="tz-date" id="tzd-${id}">---</div>`;
+
+    // Drag events
+    block.addEventListener('dragstart', e => {
+      dragSrcId = id;
+      block.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    block.addEventListener('dragend', () => {
+      block.classList.remove('dragging');
+      document.querySelectorAll('.tz-block').forEach(b => b.classList.remove('drag-over'));
+    });
+    block.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      document.querySelectorAll('.tz-block').forEach(b => b.classList.remove('drag-over'));
+      if (id !== dragSrcId) block.classList.add('drag-over');
+    });
+    block.addEventListener('drop', e => {
+      e.preventDefault();
+      if (!dragSrcId || dragSrcId === id) return;
+      const fromIdx = activeZones.indexOf(dragSrcId);
+      const toIdx   = activeZones.indexOf(id);
+      activeZones.splice(fromIdx, 1);
+      activeZones.splice(toIdx, 0, dragSrcId);
+      dragSrcId = null;
+      renderClocks();
+      updateClock();
+    });
+
+    bar.appendChild(block);
+  });
+  renderDropdown();
+}
+
+function renderDropdown() {
+  const dd = document.getElementById('tzDropdown');
+  // Prevent any click inside dropdown from bubbling to the document close handler
+  dd.onclick = e => e.stopPropagation();
+  // Keep title row, rebuild zone rows
+  const existing = dd.querySelectorAll('.dd-row');
+  existing.forEach(r => r.remove());
+
+  ALL_ZONES.forEach(zone => {
+    const active = activeZones.includes(zone.id);
+    const row = document.createElement('div');
+    row.className = 'dd-row' + (active ? ' checked' : '');
+    row.innerHTML = `
+      <span class="dd-label">${zone.city}</span>
+      <span class="dd-offset">UTC${zone.utcOffset}</span>
+      <span class="dd-check">${active ? '✓' : ''}</span>`;
+    row.addEventListener('click', e => {
+      e.stopPropagation(); // keep dropdown open while toggling
+      if (activeZones.includes(zone.id)) {
+        if (activeZones.length <= 1) return; // always keep at least one
+        activeZones = activeZones.filter(id => id !== zone.id);
+      } else {
+        activeZones.push(zone.id);
+      }
+      renderClocks();
+      updateClock();
+    });
+    dd.appendChild(row);
+  });
+}
+
+function toggleTzDropdown(e) {
+  e.stopPropagation(); // prevent the document click handler closing it immediately
+  document.getElementById('tzDropdown').classList.toggle('open');
+}
+
+// Close dropdown only when clicking outside both the dropdown and the button
+document.addEventListener('click', e => {
+  if (!e.target.closest('#tzDropdown') && !e.target.closest('#tzMenuBtn')) {
+    document.getElementById('tzDropdown').classList.remove('open');
+  }
+});
+
+function updateClock() {
+  const now = new Date();
+  activeZones.forEach(id => {
+    const zone = ALL_ZONES.find(z => z.id === id);
+    if (!zone) return;
+    const timeStr = now.toLocaleTimeString('en-GB', {
+      timeZone: zone.tz, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    });
+    const dateStr = now.toLocaleDateString('en-GB', {
+      timeZone: zone.tz, day: '2-digit', month: 'short'
+    }).toUpperCase();
+    const tEl = document.getElementById('tz-' + id);
+    const dEl = document.getElementById('tzd-' + id);
+    if (tEl) tEl.textContent = timeStr;
+    if (dEl) dEl.textContent = dateStr;
+  });
+}
+
+renderClocks();
+updateClock();
+setInterval(updateClock, 1000);
+
+// ── LOADING ───────────────────────────────────────────────────────────────────
+function setLoadStatus(msg) {
+  document.getElementById('loadStatus').textContent = msg;
+}
+
+function hideLoader() {
+  const el = document.getElementById('loadScreen');
+  el.classList.add('hidden');
+  setTimeout(() => el.remove(), 900);
+}
+
+// ── WEATHER RADAR (RainViewer) ────────────────────────────────────────────────
+async function initWeather() {
+  try {
+    const res = await fetch('http://localhost:3000/rainviewer');
+    const data = await res.json();
+    const latest = data.radar.past[data.radar.past.length - 1];
+    // latest.path is like /v2/radar/TIMESTAMP — proxy strips /weather prefix
+    const tileUrl = `http://localhost:3000/weather${latest.path}/256/{z}/{x}/{y}/4/1_1.png`;
+
+    weatherLayer = viewer.imageryLayers.addImageryProvider(
+      new Cesium.UrlTemplateImageryProvider({
+        url: tileUrl,
+        maximumLevel: 12,
+        credit: 'RainViewer',
+      })
+    );
+    weatherLayer.alpha = 0.65;
+  } catch(e) {
+    console.warn('Weather fetch failed:', e);
+  }
+}
+
+// ── SATELLITE TLE (Celestrak) ─────────────────────────────────────────────────
+let tleData = [];
+let satRecords = [];
+
+function parseTLE(raw) {
+  const lines = raw.trim().split('\n').map(l => l.trim()).filter(Boolean);
+  const sats = [];
+  for (let i = 0; i < lines.length - 2; i += 3) {
+    if (!lines[i+1].startsWith('1 ') && !lines[i+1].startsWith('1  ')) {
+      // Some TLE sets skip names; handle 2-line sets too
+    }
+    sats.push({ name: lines[i], line1: lines[i+1], line2: lines[i+2] });
+  }
+  return sats;
+}
+
+async function fetchWithTimeout(url, ms = 4000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+    return res;
+  } catch(e) {
+    clearTimeout(timer);
+    throw e;
+  }
+}
+
+async function initSatellites() {
+  // Try local proxy first (no CORS issues), then fall through to sample TLEs
+  // Proxy maps /celestrak/GROUP → celestrak.org/NORAD/elements/gp.php?GROUP=...&FORMAT=tle
+  const sources = [
+    'http://localhost:3000/celestrak/active',      // ~6000 active satellites
+    'http://localhost:3000/celestrak/stations',    // space stations
+  ];
+
+  let loaded = false;
+  for (const url of sources) {
+    try {
+      setLoadStatus('Loading satellite catalog...');
+      const res = await fetchWithTimeout(url, 4000);
+      if (!res.ok) continue;
+      const text = await res.text();
+      const parsed = parseTLE(text);
+      if (parsed.length > 3) {
+        tleData = parsed;
+        loaded = true;
+        break;
+      }
+    } catch(e) {
+      // timed out or blocked — try next source
+    }
+  }
+
+  if (!loaded) {
+    console.warn('Celestrak unreachable — using sample TLEs. Add a backend proxy for the full catalog.');
+    tleData = getSampleTLEs();
+  }
+
+  satRecords = tleData.slice(0, 300).map(tle => {
+    try {
+      return { name: tle.name, satrec: satellite.twoline2satrec(tle.line1, tle.line2) };
+    } catch(e) { return null; }
+  }).filter(Boolean);
+
+  placeSatellites();
+  if (sublayers.satpaths) updateSatPaths(true); // draw paths immediately if enabled
+  document.getElementById('count-satellites').textContent = satRecords.length;
+  document.getElementById('stat-sats').textContent = satRecords.length.toLocaleString();
+}
+
+function propagateSat(satrec, date) {
+  const pos = satellite.propagate(satrec, date);
+  if (!pos || !pos.position) return null;
+  const gmst = satellite.gstime(date);
+  const geo = satellite.eciToGeodetic(pos.position, gmst);
+  return {
+    lon: Cesium.Math.toDegrees(geo.longitude),
+    lat: Cesium.Math.toDegrees(geo.latitude),
+    alt: geo.height * 1000
+  };
+}
+
+// Satellite orbit path entities (sublayer)
+const satPathEntities = [];
+
+function placeSatellites() {
+  satRecords.forEach(rec => {
+    const positionCallback = new Cesium.CallbackProperty(() => {
+      const pos = propagateSat(rec.satrec, new Date());
+      if (!pos) return Cesium.Cartesian3.ZERO;
+      return Cesium.Cartesian3.fromDegrees(pos.lon, pos.lat, pos.alt);
+    }, false);
+
+    const entity = viewer.entities.add({
+      name: rec.name,
+      position: positionCallback,
+      point: {
+        pixelSize: 4,
+        color: Cesium.Color.fromCssColorString('#39ff14').withAlpha(0.9),
+        outlineColor: Cesium.Color.fromCssColorString('#39ff14').withAlpha(0.4),
+        outlineWidth: 2,
+      },
+      properties: { type: 'satellite', satrec: rec.satrec }
+    });
+    satelliteEntities.push(entity);
+  });
+  console.log('Satellites placed:', satelliteEntities.length);
+}
+
+function updateSatPaths(show) {
+  // Remove old path entities
+  satPathEntities.forEach(e => viewer.entities.remove(e));
+  satPathEntities.length = 0;
+  if (!show) return;
+
+  const now = new Date();
+  satRecords.forEach(rec => {
+    // Build one full orbit ahead (~90 min for LEO) at 60s resolution
+    const positions = [];
+    for (let dt = 0; dt <= 5400; dt += 60) {
+      const t   = new Date(now.getTime() + dt * 1000);
+      const pos = propagateSat(rec.satrec, t);
+      if (!pos) continue;
+      positions.push(Cesium.Cartesian3.fromDegrees(pos.lon, pos.lat, pos.alt));
+    }
+    if (positions.length < 2) return;
+    const e = viewer.entities.add({
+      polyline: {
+        positions,
+        width: 1,
+        material: new Cesium.ColorMaterialProperty(
+          Cesium.Color.fromCssColorString('#39ff14').withAlpha(0.18)
+        ),
+        arcType: Cesium.ArcType.NONE,
+      }
+    });
+    satPathEntities.push(e);
+  });
+}
+
+// ── FLIGHTS (OpenSky) ─────────────────────────────────────────────────────────
+let flightData = [];
+
+function applyFlightData(states) {
+  flightData = (states || []).filter(s => s[5] && s[6] && s[8] === false);
+  if (flightData.length === 0) return false;
+  try { updateFlightEntities(); } catch(e) { console.error('updateFlightEntities error:', e); }
+  document.getElementById('count-flights').textContent = flightData.length.toLocaleString();
+  document.getElementById('stat-flights').textContent = flightData.length.toLocaleString();
+  return true;
+}
+
+async function fetchFlights() {
+  document.getElementById('count-flights').textContent = '…';
+  // Flights are served by proxy.js running on localhost:3000
+  // Start it with: node proxy.js
+  try {
+    const res = await fetch('http://localhost:3000/flights');
+    if (res.ok) {
+      const data = await res.json();
+      if (applyFlightData(data.states)) {
+        console.log('Flights loaded:', flightData.length);
+        return;
+      }
+    } else {
+      console.warn('Proxy responded:', res.status);
+    }
+  } catch(e) {
+    console.warn('Flight fetch error — is proxy.js running? (node proxy.js):', e.message);
+  }
+
+  document.getElementById('count-flights').textContent = 'N/A';
+  document.getElementById('stat-flights').textContent = '—';
+}
+
+// ── SHIP ICON GENERATOR ──────────────────────────────────────────────────────
+// Top-down vessel silhouette — pointed bow, wider stern, heading baked into SVG
+function makeShipIcon(headingDeg) {
+  const rad = (headingDeg * Math.PI) / 180;
+  const cos = Math.cos(rad).toFixed(4);
+  const sin = Math.sin(rad).toFixed(4);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="-10 -10 20 20">
+    <g transform="matrix(${cos},${-sin},${sin},${cos},0,0)" opacity="0.92">
+      <!-- hull: pointed bow at top, flat stern at bottom -->
+      <path d="M0,-8 L4.5,0 L4.5,6 L-4.5,6 L-4.5,0 Z" fill="#ff6b35"/>
+      <!-- bow highlight -->
+      <ellipse cx="0" cy="-6.5" rx="1" ry="1.5" fill="white" opacity="0.35"/>
+      <!-- superstructure/bridge block -->
+      <rect x="-2.5" y="-1" width="5" height="4" rx="0.8" fill="#ff8c5a" opacity="0.9"/>
+    </g>
+  </svg>`;
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+}
+
+const _shipIconCache = {};
+function getShipIcon(cogDeg) {
+  const bucket = Math.round((cogDeg || 0) / 5) * 5 % 360;
+  if (!_shipIconCache[bucket]) _shipIconCache[bucket] = makeShipIcon(bucket);
+  return _shipIconCache[bucket];
+}
+
+// ── AIRPLANE ICON GENERATOR ──────────────────────────────────────────────────
+// Bakes heading into the SVG transform so the icon always points true north
+// regardless of camera angle (Cesium billboard rotation is screen-space only)
+// North-pointing plane icon — heading applied via billboard.rotation + UNIT_Z
+function makePlaneIcon() {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="-12 -12 24 24">
+    <g opacity="0.92">
+      <ellipse cx="0" cy="0" rx="1.8" ry="7.5" fill="#00c8ff"/>
+      <polygon points="0,-1.5 -9,4 -9,5.5 0,2 9,5.5 9,4" fill="#00c8ff"/>
+      <polygon points="0,5 -3.5,8.5 -3.5,9.5 0,7.5 3.5,9.5 3.5,8.5" fill="#00c8ff"/>
+      <ellipse cx="0" cy="-6.5" rx="1" ry="1.5" fill="white" opacity="0.45"/>
+    </g>
+  </svg>`;
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+}
+const _planeIcon = makePlaneIcon();
+function getPlaneIcon() { return _planeIcon; }
+
+// Map of icao → entity for smooth position interpolation
+const flightEntityMap = {};
+
+function updateFlightEntities() {
+  const now = Cesium.JulianDate.now();
+  // Update interval matches our fetch rate — 30 seconds
+  const FETCH_INTERVAL_S = 30;
+
+  // Track which ICAOs are in the new data
+  const activeIcaos = new Set();
+
+  // Limit to 3000 for performance
+  const slice = flightData.slice(0, 3000);
+  slice.forEach(state => {
+    const [icao, callsign, country, , , lon, lat, baroAlt, onGround,
+           velocity, heading, vertRate, , geoAlt, squawk] = state;
+
+    if (!lon || !lat || !icao) return;
+    activeIcaos.add(icao);
+
+    const alt = Math.max(geoAlt || baroAlt || 10000, 100);
+    const hdg = (heading != null && heading >= 0) ? heading : 0;
+    const pos = Cesium.Cartesian3.fromDegrees(lon, lat, alt);
+
+    if (flightEntityMap[icao]) {
+      // Entity exists — add new position sample for smooth interpolation
+      const entity = flightEntityMap[icao];
+      entity.position.addSample(now, pos);
+      // Update heading via rotation
+      entity.billboard.rotation = -Cesium.Math.toRadians(hdg);
+    } else {
+      // New aircraft — create entity with SampledPositionProperty
+      const sampled = new Cesium.SampledPositionProperty();
+      sampled.forwardExtrapolationType = Cesium.ExtrapolationType.EXTRAPOLATE;
+      sampled.backwardExtrapolationType = Cesium.ExtrapolationType.EXTRAPOLATE;
+      sampled.setInterpolationOptions({
+        interpolationDegree: 1,
+        interpolationAlgorithm: Cesium.LinearApproximation,
+      });
+      // Add past + future samples so clock always has a valid range to evaluate
+      const pastTime = Cesium.JulianDate.addSeconds(now, -FETCH_INTERVAL_S, new Cesium.JulianDate());
+      const futureTime = Cesium.JulianDate.addSeconds(now, FETCH_INTERVAL_S, new Cesium.JulianDate());
+      if (velocity && heading != null) {
+        const hdgRad = (heading * Math.PI) / 180;
+        const cosLat = Math.cos(lat * Math.PI / 180) || 0.001;
+        const dLon = Math.sin(hdgRad) * (velocity / 111320) / cosLat;
+        const dLat = Math.cos(hdgRad) * (velocity / 111320);
+        const pastPos  = Cesium.Cartesian3.fromDegrees(lon - dLon * FETCH_INTERVAL_S, lat - dLat * FETCH_INTERVAL_S, alt);
+        const futPos   = Cesium.Cartesian3.fromDegrees(lon + dLon * FETCH_INTERVAL_S, lat + dLat * FETCH_INTERVAL_S, alt);
+        sampled.addSamples([pastTime, now, futureTime], [pastPos, pos, futPos]);
+      } else {
+        sampled.addSample(now, pos);
+      }
+
+      const entity = viewer.entities.add({
+        name: callsign ? callsign.trim() : icao,
+        position: sampled,
+        billboard: {
+          image: getPlaneIcon(0), // always use north-pointing icon, rotate via property
+          translucencyByDistance: new Cesium.NearFarScalar(8e6, 1.0, 1.2e7, 0.0),
+          rotation: -Cesium.Math.toRadians(hdg),
+          alignedAxis: Cesium.Cartesian3.UNIT_Z, // world-space rotation — icon stays fixed vs globe
+          width: 24,
+          height: 24,
+          scaleByDistance: new Cesium.NearFarScalar(5e5, 1.4, 1.2e7, 0.28),
+          translucencyByDistance: new Cesium.NearFarScalar(8e5, 1.0, 1.8e7, 0.35),
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+        },
+        properties: {
+          type: 'flight',
+          icao, callsign, country, velocity, heading, baroAlt, squawk
+        }
+      });
+      flightEntityMap[icao] = entity;
+      flightEntities.push(entity);
+      entity.show = !!layers.flights;
+    }
+  });
+
+  // Remove entities for aircraft no longer in data
+  Object.keys(flightEntityMap).forEach(icao => {
+    if (!activeIcaos.has(icao)) {
+      viewer.entities.remove(flightEntityMap[icao]);
+      delete flightEntityMap[icao];
+      const idx = flightEntities.indexOf(flightEntityMap[icao]);
+      if (idx > -1) flightEntities.splice(idx, 1);
+    }
+  });
+
+  // Redraw paths if sublayer is active
+  if (sublayers.flightpaths) {
+    try { drawFlightPaths(); } catch(e) { console.warn('Flight path draw error:', e); }
+  }
+}
+
+// ── FLIGHT PATH DRAWING ───────────────────────────────────────────────────────
+// ── OPENFLIGHTS ROUTE LOOKUP ──────────────────────────────────────────────────
+let airportCoords = null;  // ICAO → {lat, lon}
+let routeMap      = null;  // 'AIRLINE:FLIGHTNUM' → {dep, arr}
+
+async function loadOpenFlightsData() {
+  if (airportCoords && routeMap) return; // already loaded
+
+  try {
+    const [apRes, rtRes] = await Promise.all([
+      fetch('http://localhost:3000/openflights/airports'),
+      fetch('http://localhost:3000/openflights/routes'),
+    ]);
+    const [apText, rtText] = await Promise.all([apRes.text(), rtRes.text()]);
+
+    // airports.dat: id, name, city, country, IATA, ICAO, lat, lon, ...
+    airportCoords = {};
+    apText.split('\n').forEach(line => {
+      const f = parseOpenFlightsLine(line);
+      if (!f || f.length < 8) return;
+      const icao = f[5].replace(/"/g, '').trim();
+      const iata = f[4].replace(/"/g, '').trim();
+      const lat  = parseFloat(f[6]);
+      const lon  = parseFloat(f[7]);
+      if (icao && icao !== '\\N' && !isNaN(lat)) airportCoords[icao] = { lat, lon };
+      if (iata && iata !== '\\N' && !isNaN(lat)) airportCoords[iata] = { lat, lon };
+    });
+
+    // routes.dat: airline, airlineId, src, srcId, dst, dstId, codeshare, stops, equipment
+    // Key by airline ICAO (3-char) + flight number range — we key by airline+src+dst
+    // Also build a map from airline ICAO → [{dep, arr}] for callsign matching
+    routeMap = {};
+    rtText.split('\n').forEach(line => {
+      const f = parseOpenFlightsLine(line);
+      if (!f || f.length < 5) return;
+      const airline = f[0].replace(/"/g, '').trim();
+      const dep     = f[2].replace(/"/g, '').trim();
+      const arr     = f[4].replace(/"/g, '').trim();
+      if (!airline || dep === '\\N' || arr === '\\N') return;
+      if (!routeMap[airline]) routeMap[airline] = [];
+      routeMap[airline].push({ dep, arr });
+    });
+
+    console.log(`[OpenFlights] airports: ${Object.keys(airportCoords).length}, airlines with routes: ${Object.keys(routeMap).length}`);
+  } catch(e) {
+    console.warn('[OpenFlights] load failed:', e.message);
+  }
+}
+
+function parseOpenFlightsLine(line) {
+  // CSV with possible quoted fields containing commas
+  const fields = [];
+  let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { inQ = !inQ; }
+    else if (c === ',' && !inQ) { fields.push(cur); cur = ''; }
+    else cur += c;
+  }
+  fields.push(cur);
+  return fields;
+}
+
+function getRouteForFlight(callsign) {
+  if (!routeMap || !airportCoords || !callsign) return null;
+  const cs = callsign.trim();
+
+  // Callsign format: ICAO airline prefix (3 chars) + flight number digits
+  // e.g. UAL123 → airline UAL, routes list
+  const airlineCode = cs.slice(0, 3).toUpperCase();
+  const routes = routeMap[airlineCode];
+  if (!routes || routes.length === 0) return null;
+
+  // Try to match by flight number if numeric suffix matches route index heuristic
+  // Since we can't reliably match flight# to specific route without a schedule API,
+  // use the flight number modulo routes.length as a consistent (stable) assignment
+  const numStr = cs.slice(3).replace(/\D/g, '');
+  const num    = parseInt(numStr) || 0;
+  const route  = routes[num % routes.length];
+
+  const dep = airportCoords[route.dep];
+  const arr = airportCoords[route.arr];
+  if (!dep || !arr) return null;
+  return { dep, arr, depCode: route.dep, arrCode: route.arr };
+}
+
+// Draws full great-circle flight paths using OpenFlights route data
+async function drawFlightPaths() {
+  flightPathEntities.forEach(e => viewer.entities.remove(e));
+  flightPathEntities.length = 0;
+  if (!sublayers.flightpaths) return;
+
+  await loadOpenFlightsData();
+
+  let routeHits = 0, fallbacks = 0;
+
+  flightData.slice(0, 3000).forEach(state => {
+    const [icao, callsign, , , , lon, lat, baroAlt, onGround,
+           velocity, heading, , , geoAlt] = state;
+    if (!lon || !lat) return;
+
+    const alt = Math.max(geoAlt || baroAlt || 10000, 1000);
+    const hdgRad = ((heading || 0) * Math.PI) / 180;
+    const cosLat = Math.cos((lat * Math.PI) / 180);
+
+    const route = getRouteForFlight(callsign);
+
+    if (route) {
+      // Full great-circle arc from departure → current → arrival
+      routeHits++;
+      const { dep, arr } = route;
+
+      // Draw full route arc (dep → arr) faintly
+      const entity = viewer.entities.add({
+        polyline: {
+          positions: Cesium.Cartesian3.fromDegreesArrayHeights([
+            dep.lon, dep.lat, alt * 0.3,
+            lon,     lat,     alt,
+            arr.lon, arr.lat, alt * 0.3,
+          ]),
+          width: 1,
+          material: new Cesium.PolylineGlowMaterialProperty({
+            glowPower: 0.15,
+            color: Cesium.Color.fromCssColorString('#00c8ff').withAlpha(0.35),
+          }),
+          clampToGround: false,
+          arcType: Cesium.ArcType.GEODESIC,
+        }
+      });
+      flightPathEntities.push(entity);
+    } else {
+      // Fallback: short heading-based trail + projection
+      fallbacks++;
+      const TRAIL = 4.0, PROJ = 5.0;
+      const dLat = Math.cos(hdgRad);
+      const dLon = Math.sin(hdgRad) / (cosLat || 1);
+      const tail = viewer.entities.add({
+        polyline: {
+          positions: Cesium.Cartesian3.fromDegreesArrayHeights([
+            lon - dLon * TRAIL, lat - dLat * TRAIL, alt,
+            lon, lat, alt,
+            lon + dLon * PROJ,  lat + dLat * PROJ,  alt,
+          ]),
+          width: 1,
+          material: Cesium.Color.fromCssColorString('#00c8ff').withAlpha(0.25),
+          clampToGround: false,
+          arcType: Cesium.ArcType.GEODESIC,
+        }
+      });
+      flightPathEntities.push(tail);
+    }
+  });
+
+  console.log(`[FlightPaths] routes: ${routeHits}, fallback stubs: ${fallbacks}`);
+}
+
+// ── SUBLAYER TOGGLE ───────────────────────────────────────────────────────────
+function toggleSubLayer(name) {
+  sublayers[name] = !sublayers[name];
+  const toggle = document.getElementById('toggle-' + name);
+  if (toggle) toggle.classList.toggle('on', sublayers[name]);
+
+  if (name === 'flightpaths') {
+    if (sublayers.flightpaths) {
+      drawFlightPaths();
+    } else {
+      flightPathEntities.forEach(e => viewer.entities.remove(e));
+      flightPathEntities.length = 0;
+    }
+  } else if (name === 'satpaths') {
+    updateSatPaths(sublayers.satpaths);
+    const subRow = document.getElementById('row-satpaths');
+    if (subRow) subRow.style.opacity = sublayers.satpaths ? '1' : '0.5';
+  }
+}
+
+// ── SHIPS (Live AIS WebSocket via aisstream.io) ───────────────────────────────
+const shipMap = {}; // mmsi -> entity
+let aisSocket = null;
+let aisReconnectTimer = null;
+
+const SHIP_TYPE_NAMES = {
+  0:'Unknown',20:'WIG',30:'Fishing',31:'Towing',32:'Towing(Large)',
+  33:'Dredging',34:'Diving',35:'Military',36:'Sailing',37:'Pleasure',
+  40:'HSC',50:'Pilot',51:'SAR',52:'Tug',53:'Port Tender',54:'Anti-pollution',
+  55:'Law Enforcement',57:'Medical',58:'Non-combat',59:'Passenger (sub)',
+  60:'Passenger',61:'Passenger',62:'Passenger',63:'Passenger',69:'Passenger',
+  70:'Cargo',71:'Cargo',72:'Cargo',73:'Cargo',74:'Cargo',79:'Cargo',
+  80:'Tanker',81:'Tanker',82:'Tanker',83:'Tanker',84:'Tanker',89:'Tanker',
+  90:'Other',91:'Other',92:'Other',99:'Other'
+};
+
+function getShipTypeName(t) {
+  if (!t) return 'Unknown';
+  return SHIP_TYPE_NAMES[t] || SHIP_TYPE_NAMES[Math.floor(t/10)*10] || 'Other';
+}
+
+function makeShipSampled(lon, lat, cogDeg, sogKnots) {
+  const sampled = new Cesium.SampledPositionProperty();
+  sampled.forwardExtrapolationType = Cesium.ExtrapolationType.EXTRAPOLATE;
+  sampled.backwardExtrapolationType = Cesium.ExtrapolationType.EXTRAPOLATE;
+  sampled.setInterpolationOptions({
+    interpolationDegree: 1,
+    interpolationAlgorithm: Cesium.LinearApproximation,
+  });
+  const now = Cesium.JulianDate.now();
+  const sogMs = (sogKnots || 8) * 0.5144; // knots to m/s, default 8 knots
+  const hdgRad = ((cogDeg || 0) * Math.PI) / 180;
+  const cosLat = Math.cos(lat * Math.PI / 180) || 0.001;
+  const LOOKAHEAD = 120; // seconds
+  const dLon = Math.sin(hdgRad) * (sogMs / 111320) / cosLat * LOOKAHEAD;
+  const dLat = Math.cos(hdgRad) * (sogMs / 111320) * LOOKAHEAD;
+  const pastTime   = Cesium.JulianDate.addSeconds(now, -LOOKAHEAD, new Cesium.JulianDate());
+  const futureTime = Cesium.JulianDate.addSeconds(now,  LOOKAHEAD, new Cesium.JulianDate());
+  const pastPos    = Cesium.Cartesian3.fromDegrees(lon - dLon, lat - dLat, 0);
+  const futurePos  = Cesium.Cartesian3.fromDegrees(lon + dLon, lat + dLat, 0);
+  const curPos     = Cesium.Cartesian3.fromDegrees(lon, lat, 0);
+  sampled.addSamples([pastTime, now, futureTime], [pastPos, curPos, futurePos]);
+  return sampled;
+}
+
+function initShips() {
+  seedShips();   // paint ships immediately from known lane data
+  connectAIS();  // then layer live updates on top as they arrive
+}
+
+function seedShips() {
+  const lanes = [
+    // English Channel / North Sea
+    { lon:1.5,   lat:51.2,  spread:1.0, count:18, type:'Cargo' },
+    // Singapore Strait
+    { lon:103.8, lat:1.2,   spread:0.8, count:22, type:'Tanker' },
+    // Red Sea (Suez approach) — tight north-south corridor
+    { lon:32.5,  lat:24.0,  spread:0.5, count:14, type:'Cargo' },
+    // Panama Canal approach (Pacific)
+    { lon:-80.5, lat:7.5,   spread:0.8, count:12, type:'Container' },
+    // North Atlantic shipping lane
+    { lon:-35,   lat:46,    spread:8,   count:28, type:'Cargo' },
+    // North Pacific shipping lane
+    { lon:-170,  lat:38,    spread:10,  count:22, type:'Tanker' },
+    // South China Sea (open water)
+    { lon:114,   lat:14,    spread:4,   count:20, type:'Cargo' },
+    // Cape of Good Hope
+    { lon:18,    lat:-36,   spread:2,   count:11, type:'Bulk Carrier' },
+    // Persian Gulf (open water, away from coast)
+    { lon:54,    lat:23,    spread:1.5, count:16, type:'Tanker' },
+    // Mediterranean (open water)
+    { lon:14,    lat:36,    spread:4,   count:18, type:'Cargo' },
+    // US East Coast offshore (well offshore)
+    { lon:-71,   lat:35,    spread:2,   count:13, type:'Container' },
+    // Rotterdam approaches (North Sea)
+    { lon:3.5,   lat:52.8,  spread:0.8, count:11, type:'Cargo' },
+    // Japan / Korea Strait
+    { lon:130,   lat:34,    spread:2,   count:16, type:'Tanker' },
+    // Caribbean Sea (open water)
+    { lon:-67,   lat:15,    spread:3,   count:9,  type:'Cargo' },
+    // Strait of Malacca
+    { lon:99,    lat:4.5,   spread:1.5, count:14, type:'Tanker' },
+    // Gulf of Mexico (open water)
+    { lon:-92,   lat:24,    spread:3,   count:10, type:'Tanker' },
+  ];
+  const flags = ['Panama','Liberia','Marshall Islands','Bahamas','Singapore','Malta','Cyprus','China','Norway','Greece'];
+  let n = 0;
+  lanes.forEach(lane => {
+    for (let i = 0; i < lane.count; i++) {
+      const lon = lane.lon + (Math.random() - 0.5) * lane.spread * 2;
+      const lat = lane.lat + (Math.random() - 0.5) * lane.spread;
+      const mmsi = String(200000000 + Math.floor(Math.random() * 600000000));
+      const sog = (5 + Math.random() * 15).toFixed(1);
+      const cog = Math.floor(Math.random() * 360).toString();
+      const flag = flags[Math.floor(Math.random() * flags.length)];
+      const shipSampled = makeShipSampled(lon, lat, parseFloat(cog), parseFloat(sog));
+      const entity = viewer.entities.add({
+        name: mmsi,
+        position: shipSampled,
+        billboard: {
+          image: getShipIcon(0),
+          translucencyByDistance: new Cesium.NearFarScalar(8e6, 1.0, 1.2e7, 0.0),
+          rotation: -Cesium.Math.toRadians(parseFloat(cog) || 0),
+          alignedAxis: Cesium.Cartesian3.UNIT_Z,
+          width: 20,
+          height: 20,
+          scaleByDistance: new Cesium.NearFarScalar(3e5, 1.4, 1e7, 0.25),
+          translucencyByDistance: new Cesium.NearFarScalar(8e5, 1.0, 1.5e7, 0.35),
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+        },
+        properties: { type: 'ship', mmsi, shipType: lane.type, flag, sog, cog, dest: '—' }
+      });
+      shipMap[mmsi] = entity;
+      shipEntities.push(entity);
+      n++;
+    }
+  });
+  document.getElementById('count-ships').textContent = n.toLocaleString();
+  document.getElementById('stat-ships').textContent = n.toLocaleString();
+}
+
+function connectAIS() {
+  if (aisSocket) { try { aisSocket.close(); } catch(e){} }
+
+  try {
+    aisSocket = new WebSocket('ws://localhost:3001');
+  } catch(e) {
+    console.warn('AIS WebSocket blocked. Seed data only.');
+    return;
+  }
+
+  aisSocket.onopen = () => {
+    console.log('AIS relay connected');
+  };
+
+  aisSocket.onmessage = (event) => {
+    if (!layers.ships) return;
+    try {
+      const msg = JSON.parse(event.data);
+      const pos = msg.Message?.PositionReport;
+      if (!pos) return;
+
+      const mmsi = String(msg.MetaData?.MMSI || pos.UserID || '');
+      if (!mmsi) return;
+
+      const lon = pos.Longitude;
+      const lat = pos.Latitude;
+      const sog  = pos.Sog?.toFixed(1) ?? '—';   // Speed over ground (knots)
+      const cog  = pos.Cog?.toFixed(0) ?? '—';   // Course over ground
+      const heading = pos.TrueHeading ?? pos.Cog ?? 0;
+      const shipName = (msg.MetaData?.ShipName || '').trim() || mmsi;
+      const shipType = getShipTypeName(msg.MetaData?.ShipType);
+      const flag = msg.MetaData?.flag || '—';
+      const dest = (msg.MetaData?.Destination || '').trim() || '—';
+
+      if (lon < -180 || lon > 180 || lat < -90 || lat > 90) return;
+
+      const cartPos = Cesium.Cartesian3.fromDegrees(lon, lat, 0);
+
+      if (shipMap[mmsi]) {
+        // Add new position sample — Cesium interpolates smoothly
+        const now = Cesium.JulianDate.now();
+        const futureTime = Cesium.JulianDate.addSeconds(now, 60, new Cesium.JulianDate());
+        const hdgRad = (heading * Math.PI) / 180;
+        const sogMs = parseFloat(sog) * 0.5144; // knots to m/s
+        const cosLat = Math.cos(lat * Math.PI / 180) || 0.001;
+        const dLon = Math.sin(hdgRad) * (sogMs / 111320) / cosLat * 60;
+        const dLat = Math.cos(hdgRad) * (sogMs / 111320) * 60;
+        const futPos = Cesium.Cartesian3.fromDegrees(lon + dLon, lat + dLat, 0);
+        shipMap[mmsi].position.addSample(now, cartPos);
+        shipMap[mmsi].position.addSample(futureTime, futPos);
+        if (shipName && shipName !== mmsi) shipMap[mmsi].name = shipName;
+        entity.billboard.rotation = -Cesium.Math.toRadians(hdg);
+        const p = shipMap[mmsi].properties;
+        p.sog = sog; p.cog = cog;
+        if (dest !== '—') p.dest = dest;
+        if (flag !== '—') p.flag = flag;
+        if (shipType !== 'Unknown') p.shipType = shipType;
+      } else {
+        // Brand-new vessel from live stream
+        const shipSampled2 = makeShipSampled(lon, lat, heading, parseFloat(sog));
+        const entity = viewer.entities.add({
+          name: shipName,
+          position: shipSampled2,
+          billboard: {
+            image: getShipIcon(0),
+            translucencyByDistance: new Cesium.NearFarScalar(8e6, 1.0, 1.2e7, 0.0),
+            rotation: -Cesium.Math.toRadians(hdg),
+            alignedAxis: Cesium.Cartesian3.UNIT_Z,
+            width: 20,
+            height: 20,
+            scaleByDistance: new Cesium.NearFarScalar(3e5, 1.4, 1e7, 0.25),
+            translucencyByDistance: new Cesium.NearFarScalar(8e5, 1.0, 1.5e7, 0.35),
+            verticalOrigin: Cesium.VerticalOrigin.CENTER,
+            horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          },
+          properties: { type: 'ship', mmsi, shipType, flag, sog, cog, dest }
+        });
+        shipMap[mmsi] = entity;
+        shipEntities.push(entity);
+        entity.show = !!layers.ships;
+        const count = shipEntities.length;
+        document.getElementById('count-ships').textContent = count.toLocaleString();
+        document.getElementById('stat-ships').textContent = count.toLocaleString();
+      }
+    } catch(e) {
+      // Malformed message — skip silently
+    }
+  };
+
+  aisSocket.onerror = (e) => console.warn('AIS socket error:', e);
+
+  aisSocket.onclose = () => {
+    console.warn('AIS socket closed — reconnecting in 10s');
+    // Auto-reconnect
+    aisReconnectTimer = setTimeout(connectAIS, 10000);
+  };
+}
+
+// ── TOGGLE ALL LAYERS ─────────────────────────────────────────────────────────
+let allLayersOn = true;
+function toggleAllLayers() {
+  allLayersOn = !allLayersOn;
+  // Toggle every layer key
+  Object.keys(layers).forEach(name => {
+    if (layers[name] !== allLayersOn) toggleLayer(name);
+  });
+  // Also toggle sublayers (flight paths, orbit paths)
+  Object.keys(sublayers).forEach(name => {
+    if (sublayers[name] !== allLayersOn) toggleSubLayer(name);
+  });
+  // Update button UI
+  const indicator = document.getElementById('toggleAllIndicator');
+  const label     = document.getElementById('toggleAllLabel');
+  indicator.classList.toggle('off', !allLayersOn);
+  label.textContent = allLayersOn ? 'ALL ON' : 'ALL OFF';
+}
+
+// ── TOGGLE LAYERS ─────────────────────────────────────────────────────────────
+function toggleLayer(name) {
+  layers[name] = !layers[name];
+  const toggle = document.getElementById(`toggle-${name}`);
+  toggle.classList.toggle('on', layers[name]);
+
+  const show = layers[name];
+
+  if (name === 'flights') {
+    flightEntities.forEach(e => e.show = show);
+    // Also hide/show paths and disable sublayer UI when parent is off
+    flightPathEntities.forEach(e => e.show = show);
+    const subRow = document.getElementById('row-flightpaths');
+    if (subRow) subRow.style.opacity = show ? '1' : '0.35';
+  } else if (name === 'satellites') {
+    satelliteEntities.forEach(e => e.show = show);
+    satPathEntities.forEach(e => e.show = show);
+    const subRow = document.getElementById('row-satpaths');
+    if (subRow) subRow.style.opacity = show ? '1' : '0.35';
+  } else if (name === 'ships') {
+    shipEntities.forEach(e => e.show = show);
+  } else if (name === 'weather' && weatherLayer) {
+    weatherLayer.show = show;
+  } else if (name === 'events') {
+    eventEntities.forEach(e => e.show = show);
+  } else if (name === 'cables') {
+    cableEntities.forEach(e => e.show = show);
+  } else if (name === 'wildfires') {
+    wildfireEntities.forEach(e => e.show = show);
+  } else if (name === 'datacenters') {
+    datacenterEntities.forEach(e => e.show = show);
+  } else if (name === 'nuclear') {
+    nuclearEntities.forEach(e => e.show = show);
+  } else if (name === 'faults') {
+    if (faultDataSource) faultDataSource.show = show;
+    else faultEntities.forEach(e => e.show = show); // fallback if still loading
+  } else if (name === 'quakes') {
+    quakeEntities.forEach(e => e.show = show);
+  } else if (name === 'buoys') {
+    buoyEntities.forEach(e => e.show = show);
+  } else if (name === 'powerplants') {
+    powerPlantEntities.forEach(e => e.show = show);
+  } else if (name === 'webcams') {
+    webcamEntities.forEach(e => e.show = show);
+  } else if (name === 'radio') {
+    radioEntities.forEach(e => e.show = show);
+    if (!show) closeRadioModal();
+  } else if (name === 'roads') {
+    if (show) {
+      addRoadsLayer();
+    } else {
+      if (roadsLayer) { viewer.imageryLayers.remove(roadsLayer, true); roadsLayer = null; }
+    }
+  }
+}
+
+// ── CLICK TO INSPECT ──────────────────────────────────────────────────────────
+viewer.screenSpaceEventHandler.setInputAction(movement => {
+  if (screensaverActive) return; // wake handled by document click listener
+  const picked = viewer.scene.pick(movement.position);
+  if (Cesium.defined(picked) && Cesium.defined(picked.id)) {
+    const entity = picked.id;
+    const props = entity.properties;
+    if (!props) return;
+
+    const type = props.type ? props.type.getValue() : null;
+    if (!type) return;
+
+    showCard(entity, type, props);
+  } else {
+    closeCard();
+    stopTracking();
+  }
+}, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+function showCard(entity, type, props) {
+  const card = document.getElementById('infoCard');
+  document.getElementById('cardType').textContent = type.toUpperCase();
+  const cardNameEl = document.getElementById('cardName');
+  cardNameEl.textContent = entity.name || '';
+  cardNameEl.style.display = entity.name ? 'block' : 'none';
+  card.classList.add('visible');
+
+  // Show/hide track button for moving entities
+  const trackable = ['flight', 'satellite', 'ship'];
+  const trackBtn = document.getElementById('trackBtn');
+  if (trackable.includes(type)) {
+    trackBtn.style.display = 'block';
+    const isTracking = trackedEntity === entity;
+    trackBtn.textContent = isTracking ? '⊙ RELEASE' : '⊙ TRACK';
+    trackBtn.onclick = () => {
+      if (trackedEntity === entity) {
+        stopTracking();
+        trackBtn.textContent = '⊙ TRACK';
+      } else {
+        trackEntity(entity);
+        trackBtn.textContent = '⊙ RELEASE';
+      }
+    };
+  } else {
+    trackBtn.style.display = 'none';
+  }
+
+  const fields = document.getElementById('cardFields');
+  closeRadioModal(); // stop any playing radio before clearing card
+  fields.innerHTML = '';
+
+  if (type === 'flight') {
+    const rows = [
+      ['ICAO', props.icao ? props.icao.getValue() : '—'],
+      ['CALLSIGN', props.callsign ? (props.callsign.getValue() || '').trim() || '—' : '—'],
+      ['COUNTRY', props.country ? props.country.getValue() : '—'],
+      ['ALTITUDE', props.baroAlt ? `${Math.round(props.baroAlt.getValue())} m` : '—'],
+      ['SPEED', props.velocity ? `${Math.round(props.velocity.getValue())} m/s` : '—'],
+      ['SQUAWK', props.squawk ? props.squawk.getValue() : '—'],
+    ];
+    rows.forEach(([k, v]) => addField(fields, k, v));
+  } else if (type === 'satellite') {
+    const rows = [
+      ['NAME', entity.name],
+      ['TYPE', 'ORBITAL OBJECT'],
+    ];
+    rows.forEach(([k, v]) => addField(fields, k, v));
+  } else if (type === 'datacenter') {
+    const rows = [
+      ['FACILITY', props.name     ? props.name.getValue()     : '—'],
+      ['OPERATOR', props.operator ? props.operator.getValue() : '—'],
+      ['WEBSITE',  props.website  ? props.website.getValue()  : '—'],
+      ['LAT / LON', `${props.lat ? props.lat.getValue() : '—'}, ${props.lon ? props.lon.getValue() : '—'}`],
+    ];
+    rows.forEach(([k, v]) => addField(fields, k, v));
+  } else if (type === 'powerplant') {
+    const color = props.color ? props.color.getValue() : '#facc15';
+    document.getElementById('cardType').style.color = color;
+    const cap = props.capacity ? props.capacity.getValue() : 0;
+    const rows = [
+      ['PLANT',     props.name     ? props.name.getValue()     : '—'],
+      ['FUEL TYPE', props.fuel     ? props.fuel.getValue()     : '—'],
+      ['CAPACITY',  cap ? `${Number(cap).toLocaleString()} MW` : '—'],
+      ['COUNTRY',   props.country  ? props.country.getValue()  : '—'],
+      ['OWNER',     props.owner    ? props.owner.getValue()    : '—'],
+    ];
+    rows.forEach(([k, v]) => addField(fields, k, v));
+  } else if (type === 'nuclear') {
+    const rows = [
+      ['FACILITY',  props.name        ? props.name.getValue()        : '—'],
+      ['COUNTRY',   props.country     ? props.country.getValue()     : '—'],
+      ['STATUS',    props.status      ? props.status.getValue()      : '—'],
+      ['CAPACITY',  props.capacity    ? props.capacity.getValue() + ' MWe' : '—'],
+      ['TYPE',      props.reactorType ? props.reactorType.getValue() : '—'],
+      ['COMMISSIONED', props.opFrom   ? props.opFrom.getValue()      : '—'],
+      ['LAT / LON', `${props.lat ? props.lat.getValue() : '—'}, ${props.lon ? props.lon.getValue() : '—'}`],
+    ];
+    rows.forEach(([k, v]) => addField(fields, k, v));
+  } else if (type === 'fault') {
+    const rows = [
+      ['FAULT',     props.faultName ? props.faultName.getValue() : '—'],
+      ['SLIP TYPE', props.slipType  ? props.slipType.getValue()  : '—'],
+      ['SLIP RATE', props.slipRate  ? props.slipRate.getValue()  : '—'],
+    ];
+    rows.forEach(([k, v]) => addField(fields, k, v));
+  } else if (type === 'cable') {
+    const rows = [
+      ['CABLE',   props.cableName ? props.cableName.getValue() : '—'],
+      ['OWNERS',  props.owners    ? props.owners.getValue()    : '—'],
+      ['LENGTH',  props.length    ? props.length.getValue() + ' km' : '—'],
+      ['RFS',     props.rfs       ? props.rfs.getValue()      : '—'],
+    ];
+    rows.forEach(([k, v]) => addField(fields, k, v));
+  } else if (type === 'landing') {
+    const rows = [
+      ['STATION', props.pointName ? props.pointName.getValue() : '—'],
+      ['COUNTRY', props.country   ? props.country.getValue()   : '—'],
+    ];
+    rows.forEach(([k, v]) => addField(fields, k, v));
+  } else if (type === 'event') {
+    const domainVal   = props.domain   ? props.domain.getValue()   : '—';
+    const locationVal = props.title    ? props.title.getValue()    : '—';
+    const latVal      = props.lat      ? props.lat.getValue()      : '—';
+    const lonVal      = props.lon      ? props.lon.getValue()      : '—';
+    const rows = [
+      ['CATEGORY', props.theme ? props.theme.getValue() : '—'],
+      ['SOURCE',   domainVal],
+      ['LOCATION', locationVal],
+      ['LAT / LON', `${latVal}, ${lonVal}`],
+    ];
+    rows.forEach(([k, v]) => addField(fields, k, v));
+    if (props.url && props.url.getValue()) {
+      const link = document.createElement('a');
+      link.href = props.url.getValue();
+      link.target = '_blank';
+      link.textContent = 'READ SOURCE →';
+      link.style.cssText = 'display:block;margin-top:8px;color:#c084fc;font-size:10px;font-family:var(--mono);text-decoration:none;letter-spacing:0.08em;';
+      fields.appendChild(link);
+    }
+  } else if (type === 'wildfire') {
+    const rows = [
+      ['BRIGHTNESS', props.brightness ? `${props.brightness.getValue().toFixed(0)} K` : '—'],
+      ['CONFIDENCE', props.confidence ? props.confidence.getValue().toUpperCase() : '—'],
+      ['LAT / LON',  `${props.lat ? props.lat.getValue() : '—'}, ${props.lon ? props.lon.getValue() : '—'}`],
+    ];
+    rows.forEach(([k, v]) => addField(fields, k, v));
+  } else if (type === 'quake') {
+    const rows = [
+      ['MAGNITUDE', props.mag ? props.mag.getValue() : '—'],
+      ['LOCATION',  props.place ? props.place.getValue() : '—'],
+      ['DEPTH',     props.depth ? `${props.depth.getValue()} km` : '—'],
+      ['TIME',      props.time ? props.time.getValue() : '—'],
+    ];
+    rows.forEach(([k, v]) => addField(fields, k, v));
+  } else if (type === 'buoy') {
+    const BAD = new Set(['MM', 'mm', 'null', 'undefined', '999', '9999', '99', '999.0', '9999.0']);
+    const g = key => {
+      if (!props[key]) return null;
+      const v = props[key].getValue();
+      if (v === null || v === undefined) return null;
+      const s = String(v);
+      if (BAD.has(s) || parseFloat(s) >= 999) return null;
+      return s;
+    };
+    const fmt = (v, unit) => v !== null ? `${v} ${unit}` : '—';
+    const rows = [
+      ['STATION',    g('id') || '—'],
+      ['WAVE HT',    fmt(g('wvht'), 'm')],
+      ['WAVE PERIOD',fmt(g('dpd'), 's')],
+      ['WIND',       g('wspd') && g('wdir') ? `${g('wspd')} m/s @ ${g('wdir')}°` : g('wspd') ? `${g('wspd')} m/s` : '—'],
+      ['AIR TEMP',   fmt(g('atmp'), '°C')],
+      ['WATER TEMP', fmt(g('wtmp'), '°C')],
+      ['PRESSURE',   fmt(g('pres'), 'hPa')],
+    ];
+    rows.forEach(([k, v]) => addField(fields, k, v));
+  } else if (type === 'ship') {
+    const g = key => props[key] ? props[key].getValue() : '—';
+    const rows = [
+      ['MMSI',    g('mmsi')],
+      ['TYPE',    g('shipType')],
+      ['FLAG',    g('flag')],
+      ['SPEED',   g('sog') !== '—' ? `${g('sog')} kts` : '—'],
+      ['COURSE',  g('cog') !== '—' ? `${g('cog')}°` : '—'],
+      ['DEST',    g('dest')],
+    ];
+    rows.forEach(([k, v]) => addField(fields, k, v));
+  } else if (type === 'webcam') {
+    const g = key => props[key] ? props[key].getValue() : '—';
+    document.getElementById('cardType').style.color = '#f472b6';
+    const city    = g('city');
+    const region  = g('region');
+    const country = g('country');
+    const locStr  = [city, region, country].filter(v => v && v !== '—').join(', ') || '—';
+    const rows = [
+      ['LOCATION',   locStr],
+      ['STATUS',     g('status')],
+      ['CATEGORIES', g('categories') || '—'],
+      ['LAT / LON',  `${g('lat')}, ${g('lon')}`],
+    ];
+    rows.forEach(([k, v]) => addField(fields, k, v));
+    const watchBtn = document.createElement('button');
+    watchBtn.textContent = '▶ WATCH LIVE';
+    watchBtn.style.cssText = 'display:block;width:100%;margin-top:10px;padding:7px 10px;background:rgba(244,114,182,0.15);border:1px solid #f472b6;border-radius:4px;color:#f472b6;font-family:var(--mono);font-size:11px;letter-spacing:0.1em;cursor:pointer;transition:background 0.2s;';
+    watchBtn.onmouseover = () => watchBtn.style.background = 'rgba(244,114,182,0.28)';
+    watchBtn.onmouseout  = () => watchBtn.style.background = 'rgba(244,114,182,0.15)';
+    watchBtn.onclick = () => openWebcamModal(props);
+    fields.appendChild(watchBtn);
+  } else if (type === 'radio') {
+    const g = key => props[key] ? props[key].getValue() : '—';
+    document.getElementById('cardType').style.color = '#a78bfa';
+    const rows = [
+      ['STATION',  g('name')],
+      ['COUNTRY',  g('country')],
+      ['TAGS',     g('tags') || '—'],
+      ['CODEC',    `${g('codec')} · ${g('bitrate')} kbps`],
+    ];
+    rows.forEach(([k, v]) => addField(fields, k, v));
+    const listenBtn = document.createElement('button');
+    listenBtn.textContent = '▶ LISTEN LIVE';
+    listenBtn.style.cssText = 'display:block;width:100%;margin-top:10px;padding:7px 10px;background:rgba(167,139,250,0.15);border:1px solid #a78bfa;border-radius:4px;color:#a78bfa;font-family:var(--mono);font-size:11px;letter-spacing:0.1em;cursor:pointer;transition:background 0.2s;';
+    listenBtn.onmouseover = () => listenBtn.style.background = 'rgba(167,139,250,0.28)';
+    listenBtn.onmouseout  = () => listenBtn.style.background = 'rgba(167,139,250,0.15)';
+    listenBtn.onclick = () => openRadioModal(props);
+    fields.appendChild(listenBtn);
+  }
+}
+
+function addField(container, label, value) {
+  const div = document.createElement('div');
+  div.className = 'card-field';
+  div.innerHTML = `<span class="card-field-label">${label}</span><span class="card-field-value">${value}</span>`;
+  container.appendChild(div);
+}
+
+let trackedEntity = null;
+
+function trackEntity(entity) {
+  // Always reset camera transform before tracking a new entity
+  viewer.trackedEntity = undefined;
+  viewer.scene.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+  
+  // Small delay lets Cesium fully release the previous lock
+  setTimeout(() => {
+    trackedEntity = entity;
+    viewer.trackedEntity = entity;
+    document.getElementById('trackingBanner').style.display = 'block';
+
+    // Set camera offset based on entity type
+    const type = entity.properties?.type?.getValue();
+    const isShip = type === 'ship';
+    const height = isShip ? 50000 : 2000; // 50km for ships, 2km for aircraft
+    viewer.trackedEntity.viewFrom = new Cesium.Cartesian3(0, 0, height);
+  }, 50);
+}
+
+function stopTracking() {
+  if (trackedEntity) {
+    viewer.trackedEntity = undefined;
+    viewer.scene.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+    trackedEntity = null;
+    document.getElementById('trackingBanner').style.display = 'none';
+
+    // Fly to top-down at current position, preserving height
+    const pos = viewer.camera.positionCartographic;
+    viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromRadians(pos.longitude, pos.latitude, pos.height),
+      orientation: { heading: 0, pitch: Cesium.Math.toRadians(-90), roll: 0 },
+      duration: 1.2,
+      easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
+    });
+  }
+}
+
+function closeCard() {
+  closeRadioModal(); // stop radio if playing
+  document.getElementById('infoCard').classList.remove('visible');
+}
+
+// ── SAMPLE TLE FALLBACK ───────────────────────────────────────────────────────
+function getSampleTLEs() {
+  // Epochs set to 2026-03-06 (day 65 of 2026) — must be recent or propagator returns null
+  return [
+    { name: 'ISS (ZARYA)',    line1: '1 25544U 98067A   26065.50000000  .00016717  00000-0  10270-3 0  9999', line2: '2 25544  51.6400 208.9163 0001147 211.4430 148.6650 15.49559927430000' },
+    { name: 'STARLINK-1007',  line1: '1 44713U 19074A   26065.50000000  .00001000  00000-0  50000-4 0  9999', line2: '2 44713  53.0000 100.0000 0001000  90.0000 270.0000 15.06000000430000' },
+    { name: 'NOAA 18',        line1: '1 28654U 05018A   26065.50000000  .00000100  00000-0  80000-4 0  9999', line2: '2 28654  99.0000 200.0000 0010000  90.0000 270.0000 14.12000000430000' },
+    { name: 'GPS BIIR-2',     line1: '1 24876U 97035A   26065.50000000 -.00000023  00000-0  00000+0 0  9999', line2: '2 24876  55.0000 150.0000 0050000  45.0000 315.0000  2.00560000430000' },
+    { name: 'GOES-16',        line1: '1 41866U 16071A   26065.50000000 -.00000268  00000-0  00000+0 0  9999', line2: '2 41866   0.0000 100.0000 0001000  90.0000 270.0000  1.00273000430000' },
+  ];
+}
+
+// ── MAP STYLE SWITCHER ────────────────────────────────────────────────────────
+// Tile sources — all free, no API key required
+const MAP_STYLES = {
+  bing: {
+    url: 'https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    credit: '© Esri, HERE, Garmin, OpenStreetMap',
+    brightness: 0.6, saturation: 0.05, contrast: 1.25, gamma: 0.85,
+  },
+  satellite: {
+    url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    credit: '© Esri, Maxar, Earthstar Geographics',
+    brightness: 0.72, saturation: 0.85, contrast: 1.05, gamma: 1.0,
+  },
+  terrain: {
+    url: 'https://services.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+    credit: '© Esri, HERE, Garmin, USGS',
+    brightness: 0.58, saturation: 0.55, contrast: 1.1, gamma: 0.95,
+  },
+  night: {
+    url: 'https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    credit: '© Esri, HERE, Garmin, OpenStreetMap',
+    brightness: 1.0, saturation: 0.0, contrast: 1.3, gamma: 1.0,
+    minimumLevel: 0, maximumLevel: 16,
+  },
+};
+
+let activeBaseLayer = null;
+
+async function setMapStyle(styleName, loadWeather = true) {
+  const style = MAP_STYLES[styleName];
+  if (!style) return;
+
+  // Step 1: snapshot whether weather is currently showing
+  const weatherVisible = weatherLayer ? weatherLayer.show : true;
+
+  // Step 2: remove ALL imagery layers cleanly
+  viewer.imageryLayers.removeAll(true);
+  activeBaseLayer = null;
+  weatherLayer = null;
+  roadsLayer = null;
+
+  // Step 3: add the new base layer at index 0
+  const provider = new Cesium.UrlTemplateImageryProvider({
+    url: style.url,
+    credit: style.credit,
+    minimumLevel: style.minimumLevel ?? 0,
+    maximumLevel: style.maximumLevel ?? 19,
+  });
+  activeBaseLayer = viewer.imageryLayers.addImageryProvider(provider);
+  activeBaseLayer.brightness = style.brightness;
+  activeBaseLayer.saturation = style.saturation;
+  activeBaseLayer.contrast   = style.contrast;
+  activeBaseLayer.gamma      = style.gamma;
+
+  // Step 4: re-add weather radar on top (index 1) if it was loaded
+  if (layers.weather && loadWeather) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4000);
+      const res = await fetch('http://localhost:3000/rainviewer', { signal: controller.signal });
+      clearTimeout(timeout);
+      const data = await res.json();
+      const latest = data.radar.past[data.radar.past.length - 1];
+      const tileUrl = `http://localhost:3000/weather${latest.path}/256/{z}/{x}/{y}/4/1_1.png`;
+      weatherLayer = viewer.imageryLayers.addImageryProvider(
+        new Cesium.UrlTemplateImageryProvider({ url: tileUrl, maximumLevel: 6, credit: 'RainViewer' })
+      );
+      weatherLayer.alpha = 0.65;
+      weatherLayer.show = weatherVisible;
+    } catch(e) { console.warn('Weather radar unavailable:', e.message); }
+  }
+
+  // Step 5: re-add roads overlay if it was on
+  if (layers.roads) {
+    addRoadsLayer();
+  }
+
+  // Update UI
+  document.querySelectorAll('.style-row').forEach(r => r.classList.remove('active'));
+  const el = document.getElementById('style-' + styleName);
+  if (el) el.classList.add('active');
+}
+
+// ── SUBMARINE CABLES ─────────────────────────────────────────────────────────
+const cableEntities = [];
+
+// Each cable gets a distinct color — cycle through a palette
+const CABLE_PALETTE = [
+  '#38bdf8','#818cf8','#34d399','#fb7185','#fbbf24',
+  '#a78bfa','#f472b6','#2dd4bf','#60a5fa','#e879f9',
+];
+
+async function fetchCables() {
+  try {
+    // Fetch cable routes and landing points in parallel
+    const [cableRes, pointRes] = await Promise.all([
+      fetch('http://localhost:3000/cables'),
+      fetch('http://localhost:3000/landing-points'),
+    ]);
+    const [cableGeo, pointGeo] = await Promise.all([
+      cableRes.json(),
+      pointRes.json(),
+    ]);
+
+    cableEntities.forEach(e => viewer.entities.remove(e));
+    cableEntities.length = 0;
+
+    let cableCount = 0;
+
+    // Draw cable routes as polylines
+    (cableGeo.features || []).forEach((f, idx) => {
+      const props   = f.properties || {};
+      const name    = props.name    || `Cable ${idx}`;
+      const color   = Cesium.Color.fromCssColorString(
+        CABLE_PALETTE[idx % CABLE_PALETTE.length]
+      ).withAlpha(0.7);
+
+      // Each feature may be a MultiLineString or LineString
+      const geom = f.geometry;
+      if (!geom) return;
+
+      const lines = geom.type === 'MultiLineString'
+        ? geom.coordinates
+        : [geom.coordinates];
+
+      lines.forEach(line => {
+        if (!line || line.length < 2) return;
+        // Build flat degrees array for Cesium
+        const positions = [];
+        line.forEach(([lon, lat]) => {
+          if (lon != null && lat != null) positions.push(lon, lat, 0);
+        });
+        if (positions.length < 4) return;
+
+        const entity = viewer.entities.add({
+          name,
+          polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArrayHeights(positions),
+            width: 1.5,
+            material: new Cesium.PolylineGlowMaterialProperty({
+              glowPower: 0.15,
+              color,
+            }),
+            clampToGround: false,
+          },
+          properties: {
+            type: 'cable',
+            cableName: name,
+            owners: props.owners || '—',
+            length: props.length  || '—',
+            rfs:    props.rfs     || '—',
+          }
+        });
+        cableEntities.push(entity);
+      });
+      cableCount++;
+    });
+
+    // Draw landing points as small dots
+    (pointGeo.features || []).forEach(f => {
+      const props = f.properties || {};
+      const name  = props.name   || 'Landing Point';
+      const [lon, lat] = f.geometry?.coordinates || [];
+      if (lon == null || lat == null) return;
+
+      const entity = viewer.entities.add({
+        name,
+        position: Cesium.Cartesian3.fromDegrees(lon, lat, 0),
+        point: {
+          pixelSize: 5,
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 1.0, 1.2e7, 0.0),
+          color: Cesium.Color.fromCssColorString('#38bdf8').withAlpha(0.9),
+          outlineColor: Cesium.Color.WHITE.withAlpha(0.4),
+          outlineWidth: 1,
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 2.0, 8e6, 0.3),
+        },
+        properties: {
+          type: 'landing',
+          pointName: name,
+          country: props.country || '—',
+        }
+      });
+      cableEntities.push(entity);
+    });
+
+    document.getElementById('count-cables').textContent = cableCount;
+    console.log('Cables loaded:', cableCount, '| Landing points:', cableEntities.length - cableCount);
+  } catch(e) {
+    console.warn('Cable fetch failed:', e.message);
+    document.getElementById('count-cables').textContent = 'N/A';
+  }
+}
+
+// ── DATA CENTERS ─────────────────────────────────────────────────────────────
+const datacenterEntities = [];
+
+function makeDatacenterIcon() {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18">
+    <rect x="2" y="4" width="14" height="10" rx="1.5" fill="#818cf8" fill-opacity="0.85" stroke="white" stroke-width="0.8"/>
+    <rect x="4" y="6.5" width="10" height="1.5" rx="0.5" fill="white" fill-opacity="0.6"/>
+    <rect x="4" y="9" width="10" height="1.5" rx="0.5" fill="white" fill-opacity="0.6"/>
+    <rect x="4" y="11.5" width="5" height="1" rx="0.3" fill="white" fill-opacity="0.4"/>
+    <circle cx="13" cy="12" r="1" fill="#4ade80" fill-opacity="0.9"/>
+    <circle cx="9" cy="9" r="8" fill="none" stroke="#818cf8" stroke-width="0.8" stroke-opacity="0.35"/>
+  </svg>`;
+  return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+}
+const _dcIcon = null;
+function getDatacenterIcon() {
+  return makeDatacenterIcon(); // cached via billboard image caching
+}
+
+async function fetchDatacenters() {
+  datacenterEntities.forEach(e => viewer.entities.remove(e));
+  datacenterEntities.length = 0;
+
+  try {
+    const res = await fetch('http://localhost:3000/datacenters');
+    if (!res.ok) throw new Error('Datacenters status ' + res.status);
+    const data = await res.json();
+
+    const elements = data.elements || [];
+    console.log('Datacenter elements raw:', elements.length);
+
+    let count = 0;
+    const icon = makeDatacenterIcon();
+
+    elements.forEach(el => {
+      const lat = el.lat ?? el.center?.lat;
+      const lon = el.lon ?? el.center?.lon;
+      if (lat == null || lon == null) return;
+
+      const tags = el.tags || {};
+      const name    = tags.name    || tags['name:en'] || 'Data Center';
+      const op      = tags.operator || tags.brand || '—';
+      const website = tags.website  || tags['contact:website'] || null;
+
+      const entity = viewer.entities.add({
+        name: `⬡ ${name}`,
+        position: Cesium.Cartesian3.fromDegrees(lon, lat, 0),
+        billboard: {
+          image: icon,
+          translucencyByDistance: new Cesium.NearFarScalar(8e6, 1.0, 1.2e7, 0.0),
+          width: 18,
+          height: 18,
+          scaleByDistance: new Cesium.NearFarScalar(2e5, 1.8, 1.5e7, 0.3),
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+        },
+        properties: {
+          type: 'datacenter',
+          name, operator: op, website: website || '—',
+          lat: lat.toFixed(3), lon: lon.toFixed(3),
+        }
+      });
+      datacenterEntities.push(entity);
+      count++;
+    });
+
+    document.getElementById('count-datacenters').textContent = count.toLocaleString();
+    console.log('Data centers loaded:', count);
+  } catch(e) {
+    console.warn('Datacenter fetch failed:', e.message);
+    document.getElementById('count-datacenters').textContent = 'N/A';
+  }
+}
+
+// ── NUCLEAR FACILITIES ───────────────────────────────────────────────────────
+// GeoNuclearData — IAEA/WNA sourced, MIT licensed, raw GitHub JSON
+const nuclearEntities = [];
+const NUCLEAR_URL = 'http://localhost:3000/nuclear';
+
+// Status colors
+function nuclearColor(status) {
+  if (!status) return '#a3a3a3';
+  const s = status.toUpperCase();
+  if (s === 'OPERATIONAL')        return '#4ade80'; // green
+  if (s === 'UNDER CONSTRUCTION') return '#facc15'; // yellow
+  if (s === 'SUSPENDED')          return '#fb923c'; // orange
+  if (s.includes('SHUTDOWN') || s.includes('DECOMMISSION')) return '#f87171'; // red
+  return '#a3a3a3'; // grey
+}
+
+// Glowing circle SVG scaled by capacity
+function makeNuclearIcon(status) {
+  const color = nuclearColor(status);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+    <circle cx="10" cy="10" r="7" fill="${color}" fill-opacity="0.85" stroke="white" stroke-width="0.8"/>
+    <circle cx="10" cy="10" r="9.5" fill="none" stroke="${color}" stroke-width="1" stroke-opacity="0.4"/>
+    <circle cx="10" cy="10" r="2.5" fill="white" fill-opacity="0.9"/>
+    <path d="M10 7.5 L8 4 L12 4 Z" fill="white" fill-opacity="0.9"/>
+    <path d="M10 12.5 L7 16 L8.5 13 Z" fill="white" fill-opacity="0.9"/>
+    <path d="M10 12.5 L13 16 L11.5 13 Z" fill="white" fill-opacity="0.9"/>
+  </svg>`;
+  return 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svg)));
+}
+
+// Cache icons by status
+const _nucIconCache = {};
+function getNuclearIcon(status) {
+  const key = status || 'unknown';
+  if (!_nucIconCache[key]) _nucIconCache[key] = makeNuclearIcon(key);
+  return _nucIconCache[key];
+}
+
+async function fetchNuclear() {
+  nuclearEntities.forEach(e => viewer.entities.remove(e));
+  nuclearEntities.length = 0;
+
+  try {
+    const res = await fetch(NUCLEAR_URL);
+    if (!res.ok) throw new Error('Nuclear status ' + res.status);
+    const data = await res.json();
+    // GeoNuclearData format: array of plant objects
+    const plants = Array.isArray(data) ? data : (data.features || []);
+    console.log('Nuclear plants raw:', plants.length);
+    if (plants.length > 0) console.log('Nuclear sample:', JSON.stringify(plants[0]));
+
+    let count = 0;
+    plants.forEach(plant => {
+      // Support both flat JSON and GeoJSON feature formats
+      const props  = plant.properties || plant;
+      const lat    = parseFloat(props.Latitude  || props.latitude);
+      const lon    = parseFloat(props.Longitude || props.longitude);
+      if (isNaN(lat) || isNaN(lon)) return;
+
+      const name        = props.Name        || '—';
+      const country     = props.Country     || '—';
+      const status      = props.Status      || 'Unknown';
+      const capacity    = props.Capacity    || '—';
+      const reactorType = props.ReactorType || '—';
+      const opFrom      = props.OperationalFrom || '—';
+
+      // Only show operational and under construction
+      const s = status.toLowerCase();
+      if (s === 'shutdown' || s === 'decommissioning' || s === 'cancelled') return;
+
+      const entity = viewer.entities.add({
+        name: `[N] ${name}`,
+        position: Cesium.Cartesian3.fromDegrees(lon, lat, 0),
+        billboard: {
+          image: getNuclearIcon(status),
+          translucencyByDistance: new Cesium.NearFarScalar(8e6, 1.0, 1.2e7, 0.0),
+          width: 20,
+          height: 20,
+          scaleByDistance: new Cesium.NearFarScalar(3e5, 1.6, 1.2e7, 0.4),
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+        },
+        properties: {
+          type: 'nuclear',
+          name, country, status, capacity, reactorType, opFrom,
+          lat: lat.toFixed(3), lon: lon.toFixed(3),
+        }
+      });
+      nuclearEntities.push(entity);
+      count++;
+    });
+
+    document.getElementById('count-nuclear').textContent = count.toLocaleString();
+    console.log('Nuclear facilities loaded:', count);
+  } catch(e) {
+    console.warn('Nuclear fetch failed:', e.message);
+    document.getElementById('count-nuclear').textContent = 'N/A';
+  }
+}
+
+// ── CHUNK PROCESSOR ───────────────────────────────────────────────────────────
+// Processes an array in batches, yielding to the browser between each batch.
+// Prevents long synchronous loops from freezing Cesium/UI during load.
+function chunkProcess(items, batchSize, processFn, onDone) {
+  let i = 0;
+  function next() {
+    const end = Math.min(i + batchSize, items.length);
+    for (; i < end; i++) processFn(items[i], i);
+    if (i < items.length) {
+      setTimeout(next, 0);
+    } else {
+      if (onDone) onDone();
+    }
+  }
+  setTimeout(next, 0);
+}
+
+// ── FAULT LINES ──────────────────────────────────────────────────────────────
+// GEM Global Active Faults Database — fetched directly from GitHub raw
+let faultDataSource = null;
+const faultEntities = [];
+const FAULT_URL = 'http://localhost:3000/faults';
+
+// Color by fault slip type
+function faultColor(slipType) {
+  if (!slipType) return '#ef4444';
+  const t = slipType.toLowerCase();
+  if (t.includes('reverse') || t.includes('thrust'))  return '#f97316';
+  if (t.includes('normal'))                            return '#a78bfa';
+  if (t.includes('strike') || t.includes('left') || t.includes('right')) return '#ef4444';
+  return '#ef4444';
+}
+
+async function fetchFaults() {
+  // Remove old datasource if re-fetching
+  if (faultDataSource) { viewer.dataSources.remove(faultDataSource, true); faultDataSource = null; }
+  faultEntities.length = 0;
+
+  try {
+    const res = await fetch(FAULT_URL);
+    if (!res.ok) throw new Error('Fault status ' + res.status);
+    const data = await res.json();
+    const features = data.features || [];
+    console.log('Fault features:', features.length);
+
+    // Flatten all segments up front
+    const segments = [];
+    features.forEach(f => {
+      const props = f.properties || {};
+      const geom  = f.geometry;
+      if (!geom) return;
+      const slip  = props.slip_type || props.Slip_Type || '';
+      const name  = props.name      || props.Name      || 'Unknown Fault';
+      const rate  = props.slip_rate || props.Slip_Rate || '—';
+      const color = Cesium.Color.fromCssColorString(faultColor(slip)).withAlpha(0.6);
+      const lines = geom.type === 'MultiLineString' ? geom.coordinates : [geom.coordinates];
+      lines.forEach(line => {
+        if (!line || line.length < 2) return;
+        segments.push({ name, slip, rate, color, line });
+      });
+    });
+
+    // Use a dedicated CustomDataSource with suspendEvents — batches all adds
+    // into a single scene rebuild instead of one per entity (massive speedup)
+    const ds = new Cesium.CustomDataSource('faults');
+    await viewer.dataSources.add(ds);
+    faultDataSource = ds;
+    ds.show = layers.faults !== false;
+
+    ds.entities.suspendEvents();
+    segments.forEach(({ name, slip, rate, color, line }) => {
+      const positions = [];
+      line.forEach(([lon, lat]) => { if (lon != null && lat != null) positions.push(lon, lat, 0); });
+      if (positions.length < 4) return;
+      const entity = ds.entities.add({
+        name,
+        polyline: {
+          positions: Cesium.Cartesian3.fromDegreesArrayHeights(positions),
+          width: 1,
+          material: new Cesium.ColorMaterialProperty(color),
+          clampToGround: false,
+        },
+        properties: { type: 'fault', faultName: name, slipType: slip || '—', slipRate: rate }
+      });
+      faultEntities.push(entity);
+    });
+    ds.entities.resumeEvents(); // single scene rebuild happens here
+
+    document.getElementById('count-faults').textContent = faultEntities.length.toLocaleString();
+    console.log('Fault lines loaded:', faultEntities.length);
+  } catch(e) {
+    console.warn('Fault fetch failed:', e.message);
+    document.getElementById('count-faults').textContent = 'N/A';
+  }
+}
+
+// ── GDELT NEWS EVENTS ────────────────────────────────────────────────────────
+const eventEntities = [];
+
+// Event themes to query — covers crises, conflict, disasters, protests
+// GDELT GKG theme codes — v1 API is optimised for these, last 6h
+const GDELT_QUERY = 'NATURAL_DISASTER OR CRISISLEX_CRISISLEXREC OR PROTEST OR TAX_TERROR OR EPIDEMIC_OUTBREAK';
+const GDELT_COLOR = '#c084fc';
+
+// SVG pin icons for news events
+function makeEventIcon(color) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="24" viewBox="0 0 18 24">
+    <path d="M9 0C4 0 0 4 0 9c0 6.6 9 15 9 15s9-8.4 9-15c0-5-4-9-9-9z"
+      fill="${color}" fill-opacity="0.9" stroke="rgba(255,255,255,0.4)" stroke-width="1"/>
+    <circle cx="9" cy="9" r="3.5" fill="white" fill-opacity="0.9"/>
+  </svg>`;
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+}
+
+const eventIconCache = {};
+function getEventIcon(color) {
+  if (!eventIconCache[color]) eventIconCache[color] = makeEventIcon(color);
+  return eventIconCache[color];
+}
+
+async function fetchGdeltEvents() {
+  // GDELT GEO 2.0 API — no key needed, CORS open, last 24h
+  // Fetch each theme separately and merge — avoids result cap issues
+  eventEntities.forEach(e => viewer.entities.remove(e));
+  eventEntities.length = 0;
+
+  const seen = new Set();
+  let total = 0;
+
+  try {
+    const url = `http://localhost:3000/gdelt?query=${encodeURIComponent(GDELT_QUERY)}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Status ' + res.status);
+    const text = await res.text();
+    if (!text.startsWith('{')) throw new Error('Non-JSON: ' + text.slice(0, 120));
+    const data = JSON.parse(text);
+    // v1 GKG GeoJSON — FeatureCollection with Point geometries
+    const features = data.features || data.Features || [];
+    console.log('GDELT features received:', features.length);
+    if (features.length > 0) console.log('GDELT sample props:', JSON.stringify(features[0].properties));
+
+    features.forEach(f => {
+      const props      = f.properties || f.Properties || {};
+      const title      = props.name     || '';
+      const articleUrl = props.url      || props.urlpubtimedate || '';
+      // Extract domain from URL
+      let domain = '';
+      try { domain = new URL(articleUrl).hostname.replace('www.', ''); } catch(e) {}
+      const coords     = f.geometry?.coordinates;
+      if (!coords || coords.length < 2) return;
+      const lon = parseFloat(coords[0]);
+      const lat = parseFloat(coords[1]);
+      if (!lat || !lon || isNaN(lat) || isNaN(lon)) return;
+
+      const key = `${lat.toFixed(2)}:${lon.toFixed(2)}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+
+      // GKG v1 features use location name as 'title' — use domain as readable label
+      const displayName = (domain && domain.length > 2) ? domain : (title || 'News Event');
+      const shortTitle  = title.slice(0, 80) + (title.length > 80 ? '…' : '');
+      const entity = viewer.entities.add({
+        name: displayName,
+        position: Cesium.Cartesian3.fromDegrees(lon, lat, 0),
+        billboard: {
+          image: getEventIcon(GDELT_COLOR),
+          translucencyByDistance: new Cesium.NearFarScalar(8e6, 1.0, 1.2e7, 0.0),
+          width: 18,
+          height: 24,
+          verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          scaleByDistance: new Cesium.NearFarScalar(5e5, 1.4, 8e6, 0.4),
+        },
+        properties: {
+          type: 'event',
+          theme: 'News',
+          title,
+          url: articleUrl,
+          domain,
+          lat: lat.toFixed(3),
+          lon: lon.toFixed(3),
+        }
+      });
+      eventEntities.push(entity);
+      total++;
+    });
+  } catch(e) {
+    console.warn('GDELT fetch failed:', e.message);
+  }
+  document.getElementById('count-events').textContent = total.toLocaleString();
+  console.log('GDELT events loaded:', total);
+}
+
+// ── WILDFIRES ─────────────────────────────────────────────────────────────────
+const wildfireEntities = [];
+
+async function fetchWildfires() {
+  // NASA FIRMS VIIRS active fire data — past 24h, worldwide, CSV
+  // Routed through proxy to avoid CORS
+  try {
+    const res = await fetch('http://localhost:3000/firms');
+    if (!res.ok) throw new Error('FIRMS status ' + res.status);
+    const csv = await res.text();
+
+    wildfireEntities.forEach(e => viewer.entities.remove(e));
+    wildfireEntities.length = 0;
+
+    const lines = csv.trim().split(/\r?\n/).slice(1);
+
+    chunkProcess(lines, 500, (line) => {
+      const cols = line.split(',');
+      const lat  = parseFloat(cols[0]);
+      const lon  = parseFloat(cols[1]);
+      const brightness = parseFloat(cols[2]) || 300;
+      const confidence = cols[8] ? cols[8].trim() : 'n';
+      if (isNaN(lat) || isNaN(lon)) return;
+      const intensity = Math.min((brightness - 290) / 80, 1.0);
+      const size  = 4 + intensity * 8;
+      const alpha = confidence === 'h' ? 0.95 : confidence === 'n' ? 0.7 : 0.55;
+      const entity = viewer.entities.add({
+        name: `Wildfire (${confidence === 'h' ? 'High' : confidence === 'n' ? 'Nominal' : 'Low'} confidence)`,
+        position: Cesium.Cartesian3.fromDegrees(lon, lat, 0),
+        point: {
+          pixelSize: size,
+          color: Cesium.Color.fromCssColorString('#ff4500').withAlpha(alpha),
+          outlineColor: Cesium.Color.fromCssColorString('#ff8c00').withAlpha(0.5),
+          outlineWidth: 2,
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 2.0, 8e6, 0.4),
+        },
+        properties: { type: 'wildfire', brightness, confidence, lat: lat.toFixed(3), lon: lon.toFixed(3) }
+      });
+      wildfireEntities.push(entity);
+    }, () => {
+      document.getElementById('count-wildfires').textContent = wildfireEntities.length.toLocaleString();
+      console.log('Wildfires loaded:', wildfireEntities.length);
+    });
+  } catch(e) {
+    console.warn('Wildfire fetch failed:', e.message);
+    document.getElementById('count-wildfires').textContent = 'N/A';
+  }
+}
+
+// ── EARTHQUAKES ────────────────────────────────────────────────────────────────
+const quakeEntities = []
+const powerPlantEntities = [];
+
+// Magnitude → ring size and color
+function quakeMagColor(mag) {
+  if (mag >= 7.0) return '#ff0000';
+  if (mag >= 6.0) return '#ff4400';
+  if (mag >= 5.0) return '#ff8800';
+  if (mag >= 4.0) return '#f5c518';
+  return '#ffe066';
+}
+
+async function fetchQuakes() {
+  // USGS Earthquake Hazards — past 7 days, magnitude 2.5+
+  try {
+    const res = await fetch('http://localhost:3000/quakes');
+    if (!res.ok) throw new Error('USGS status ' + res.status);
+    const data = await res.json();
+
+    // Clear old
+    quakeEntities.forEach(e => viewer.entities.remove(e));
+    quakeEntities.length = 0;
+
+    (data.features || []).forEach(f => {
+      const [lon, lat, depth] = f.geometry.coordinates;
+      const mag   = f.properties.mag;
+      const place = f.properties.place || 'Unknown';
+      const time  = new Date(f.properties.time).toUTCString();
+
+      if (!lat || !lon || mag == null) return;
+
+      // Size scales with magnitude — M2.5=4px, M8=28px
+      const size = Math.max(4, Math.pow(2, mag) * 0.9);
+      const color = quakeMagColor(mag);
+
+      const entity = viewer.entities.add({
+        name: `M${mag.toFixed(1)} — ${place}`,
+        position: Cesium.Cartesian3.fromDegrees(lon, lat, 0),
+        point: {
+          pixelSize: size,
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 1.0, 1.2e7, 0.0),
+          color: Cesium.Color.fromCssColorString(color).withAlpha(0.85),
+          outlineColor: Cesium.Color.fromCssColorString(color).withAlpha(0.3),
+          outlineWidth: mag >= 5 ? 4 : 2,
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 2.0, 1e7, 0.5),
+        },
+        properties: {
+          type: 'quake',
+          mag: mag.toFixed(1), place, depth: depth.toFixed(1), time,
+        }
+      });
+      quakeEntities.push(entity);
+    });
+
+    document.getElementById('count-quakes').textContent = quakeEntities.length.toLocaleString();
+    console.log('Earthquakes loaded:', quakeEntities.length);
+  } catch(e) {
+    console.warn('Earthquake fetch failed:', e.message);
+    document.getElementById('count-quakes').textContent = 'N/A';
+  }
+}
+
+// ── NOAA NDBC BUOYS ───────────────────────────────────────────────────────────
+const buoyEntities = [];
+
+function buoyWaveColor(wvht) {
+  const h = parseFloat(wvht);
+  if (isNaN(h)) return '#00e5ff';
+  if (h >= 6)   return '#ff4444'; // rough
+  if (h >= 3)   return '#ffaa00'; // moderate
+  if (h >= 1)   return '#44ddff'; // slight
+  return '#00e5ff';               // calm
+}
+
+async function initBuoys() {
+  try {
+    const res = await fetch('http://localhost:3000/buoys');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const buoys = await res.json();
+
+    buoyEntities.forEach(e => viewer.entities.remove(e));
+    buoyEntities.length = 0;
+
+    buoys.forEach(b => {
+      const color = buoyWaveColor(b.wvht);
+      const entity = viewer.entities.add({
+        name: 'Buoy ' + b.id,
+        position: Cesium.Cartesian3.fromDegrees(b.lon, b.lat, 0),
+        billboard: {
+          image: makeBuoyIcon(color),
+          width: 14,
+          height: 14,
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          scaleByDistance: new Cesium.NearFarScalar(5e5, 1.4, 1.2e7, 0.3),
+          translucencyByDistance: new Cesium.NearFarScalar(8e5, 1.0, 1.5e7, 0.0),
+        },
+        properties: { type: 'buoy', id: b.id, wvht: b.wvht, wspd: b.wspd, wdir: b.wdir, atmp: b.atmp, wtmp: b.wtmp, pres: b.pres, dpd: b.dpd }
+      });
+      buoyEntities.push(entity);
+    });
+
+    document.getElementById('count-buoys').textContent = buoyEntities.length.toLocaleString();
+    console.log('Buoys loaded:', buoyEntities.length);
+  } catch(e) {
+    console.warn('Buoy fetch failed:', e.message);
+    document.getElementById('count-buoys').textContent = 'N/A';
+  }
+}
+
+function makeBuoyIcon(color) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="-7 -7 14 14">
+    <circle cx="0" cy="0" r="5" fill="${color}" opacity="0.9"/>
+    <circle cx="0" cy="0" r="5" fill="none" stroke="white" stroke-width="1" opacity="0.5"/>
+    <line x1="0" y1="-5" x2="0" y2="-7" stroke="white" stroke-width="1.5" opacity="0.8"/>
+  </svg>`;
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+}
+
+// ── INIT SEQUENCE ─────────────────────────────────────────────────────────────
+// ── ROADS TILE LAYER ──────────────────────────────────────────────────────────
+function addRoadsLayer() {
+  if (roadsLayer) { viewer.imageryLayers.remove(roadsLayer, true); roadsLayer = null; }
+  // Carto Voyager — roads/labels only, works beautifully over dark basemaps
+  roadsLayer = viewer.imageryLayers.addImageryProvider(
+    new Cesium.UrlTemplateImageryProvider({
+      url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png',
+      subdomains: ['a','b','c','d'],
+      maximumLevel: 18,
+      credit: '© OpenStreetMap contributors © CARTO',
+    })
+  );
+  roadsLayer.alpha = 0.45;
+  // Insert below weather if weather is visible
+  const targetIdx = weatherLayer
+    ? viewer.imageryLayers.indexOf(weatherLayer)
+    : viewer.imageryLayers.length;
+  viewer.imageryLayers.raiseToTop(roadsLayer);
+  if (weatherLayer) viewer.imageryLayers.raiseToTop(weatherLayer);
+}
+
+// ── POWER PLANTS ──────────────────────────────────────────────────────────────
+async function fetchPowerPlants() {
+  powerPlantEntities.forEach(e => viewer.entities.remove(e));
+  powerPlantEntities.length = 0;
+
+  // Fuel type → color mapping
+  const fuelColors = {
+    Coal:       '#78716c',
+    Gas:        '#f97316',
+    Oil:        '#a16207',
+    Nuclear:    '#22d3ee',
+    Hydro:      '#3b82f6',
+    Wind:       '#86efac',
+    Solar:      '#fde047',
+    Biomass:    '#84cc16',
+    Geothermal: '#f43f5e',
+    Wave:       '#67e8f9',
+    Waste:      '#a78bfa',
+    Storage:    '#94a3b8',
+    Other:      '#e2e8f0',
+    Cogeneration:'#fb923c',
+    Petcoke:    '#92400e',
+  };
+
+  function fuelColor(fuel) {
+    if (!fuel) return '#e2e8f0';
+    const f = fuel.charAt(0).toUpperCase() + fuel.slice(1).toLowerCase();
+    return fuelColors[f] || fuelColors[fuel] || '#e2e8f0';
+  }
+
+  try {
+    const res = await fetch('http://localhost:3000/powerplants');
+    if (!res.ok) throw new Error('Powerplants ' + res.status);
+    const text = await res.text();
+    const lines = text.trim().split('\n');
+    const headers = lines[0].split(',');
+    const idx = {
+      name: headers.indexOf('name'),
+      lat: headers.indexOf('latitude'),
+      lon: headers.indexOf('longitude'),
+      fuel: headers.indexOf('primary_fuel'),
+      capacity: headers.indexOf('capacity_mw'),
+      country: headers.indexOf('country_long'),
+      owner: headers.indexOf('owner'),
+      source: headers.indexOf('source'),
+    };
+
+    // Simple but correct CSV parser (handles quoted fields)
+    function parseCSVLine(line) {
+      const fields = [];
+      let cur = '', inQ = false;
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (c === '"') { inQ = !inQ; }
+        else if (c === ',' && !inQ) { fields.push(cur); cur = ''; }
+        else { cur += c; }
+      }
+      fields.push(cur);
+      return fields;
+    }
+
+    // Parse all rows first, then chunk-render
+    const rows = [];
+    for (let i = 1; i < lines.length; i++) {
+      const row = parseCSVLine(lines[i]);
+      const get = j => (row[j] || '').trim();
+      const lat = parseFloat(get(idx.lat));
+      const lon = parseFloat(get(idx.lon));
+      if (isNaN(lat) || isNaN(lon)) continue;
+      rows.push({
+        lat, lon,
+        fuel:     get(idx.fuel),
+        name:     get(idx.name) || 'Unknown Plant',
+        capacity: parseFloat(get(idx.capacity)) || 0,
+        country:  get(idx.country),
+        owner:    get(idx.owner),
+      });
+    }
+
+    chunkProcess(rows, 500, ({ lat, lon, fuel, name, capacity, country, owner }) => {
+      const color = fuelColor(fuel);
+      const size  = Math.min(14, Math.max(4, 4 + Math.sqrt(capacity) * 0.18));
+      const entity = viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(lon, lat),
+        point: {
+          pixelSize: size,
+          scaleByDistance: new Cesium.NearFarScalar(1e5, 1.0, 1.2e7, 0.0),
+          color: Cesium.Color.fromCssColorString(color).withAlpha(0.85),
+          outlineColor: Cesium.Color.fromCssColorString(color).withAlpha(0.3),
+          outlineWidth: 1.5,
+          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+        },
+        properties: { type: 'powerplant', name, fuel, capacity, country, owner, color },
+        show: layers.powerplants,
+      });
+      powerPlantEntities.push(entity);
+    }, () => {
+      document.getElementById('count-powerplants').textContent = powerPlantEntities.length.toLocaleString();
+      console.log('Power plants loaded:', powerPlantEntities.length);
+    });
+  } catch(e) {
+    console.warn('Power plants error:', e);
+    document.getElementById('count-powerplants').textContent = 'err';
+  }
+}
+
+
+// ── WINDY WEBCAMS ─────────────────────────────────────────────────────────────
+const webcamEntities = [];
+let webcamData = []; // store raw webcam objects for card display
+
+function makeWebcamIcon() {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="-11 -11 22 22">
+    <circle r="7" fill="#f472b6" opacity="0.92"/>
+    <!-- lens ring -->
+    <circle r="4.5" fill="none" stroke="white" stroke-width="1.2" opacity="0.8"/>
+    <!-- lens center -->
+    <circle r="2.2" fill="white" opacity="0.85"/>
+    <!-- record dot -->
+    <circle cx="5.5" cy="-5.5" r="2" fill="#ff2255"/>
+  </svg>`;
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+}
+const _webcamIcon = makeWebcamIcon();
+
+async function fetchWebcams() {
+  document.getElementById('count-webcams').textContent = '…';
+  try {
+    const url = `http://localhost:3000/webcams?t=${Date.now()}`;
+    const res = await fetch(url);
+    if (!res.ok) { console.warn('Webcams API error:', res.status); document.getElementById('count-webcams').textContent = 'err'; return; }
+    const data = await res.json();
+    const cams = data.webcams || [];
+    webcamData = cams;
+    if (cams.length > 0) console.log('[Webcam] sample player:', JSON.stringify(cams[0].player));
+    placeWebcams(cams);
+    document.getElementById('count-webcams').textContent = cams.length.toLocaleString();
+  } catch(e) {
+    console.warn('Webcams fetch error:', e);
+    document.getElementById('count-webcams').textContent = 'err';
+  }
+}
+
+function placeWebcams(cams) {
+  cams.forEach(cam => {
+    const loc = cam.location;
+    if (!loc || loc.latitude == null || loc.longitude == null) return;
+
+    const entity = viewer.entities.add({
+      name: cam.title || 'Webcam',
+      position: Cesium.Cartesian3.fromDegrees(loc.longitude, loc.latitude, 50),
+      billboard: {
+        image: _webcamIcon,
+        width: 22,
+        height: 22,
+        verticalOrigin: Cesium.VerticalOrigin.CENTER,
+        horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+        scaleByDistance: new Cesium.NearFarScalar(5e5, 1.2, 1e7, 0.3),
+        translucencyByDistance: new Cesium.NearFarScalar(1e6, 1.0, 1.5e7, 0.0),
+      },
+      properties: {
+        type:      'webcam',
+        webcamId:  cam.webcamId || cam.id || '',
+        title:     cam.title || '',
+        city:      loc.city || '',
+        country:   loc.country || '',
+        region:    loc.region || '',
+        lat:       loc.latitude,
+        lon:       loc.longitude,
+        playerUrl: (typeof cam.player?.day === 'string' ? cam.player.day : cam.player?.day?.embed) || (typeof cam.player?.live === 'string' ? cam.player.live : cam.player?.live?.embed) || '',
+        previewUrl: (typeof cam.player?.day === 'object' ? cam.player?.day?.preview : '') || '',
+        status:    cam.status || '',
+        categories: (cam.categories || []).map(c => c.name || c.id).join(', '),
+      }
+    });
+    entity.show = !!layers.webcams;
+    webcamEntities.push(entity);
+  });
+  console.log('Webcams placed:', webcamEntities.length);
+}
+
+// ── WEBCAM MODAL ──────────────────────────────────────────────────────────────
+async function openWebcamModal(props) {
+  const g = key => props[key] ? props[key].getValue() : '';
+  const title    = g('title') || 'Webcam';
+  const city     = g('city');
+  const region   = g('region');
+  const country  = g('country');
+  const webcamId = g('webcamId');
+  const dayUrl   = g('playerUrl');
+  const status   = g('status');
+  const cats     = g('categories');
+  const locParts = [city, region, country].filter(Boolean);
+  const meta     = [locParts.join(', '), status, cats].filter(Boolean).join('  ·  ');
+
+  document.getElementById('webcamModalTitle').textContent = title;
+  document.getElementById('webcamModalMeta').textContent  = (meta || '—') + '  ·  loading...';
+
+  const frame    = document.getElementById('webcamFrame');
+  const fallback = document.getElementById('webcamFallback');
+  const modal    = document.getElementById('webcamModal');
+
+  frame.src = '';
+  frame.style.display = 'block';
+  fallback.style.display = 'none';
+  modal.classList.add('visible');
+
+  let embedUrl = dayUrl;
+  let isLive = false;
+
+  if (webcamId) {
+    try {
+      const res = await fetch(`http://localhost:3000/webcams/api/v3/webcams/${webcamId}?include=player`);
+      const data = await res.json();
+      const cam = data.webcam || data;
+      const liveAvail = cam.player?.live?.available;
+      const liveEmbed = cam.player?.live?.embed;
+      if (liveAvail && liveEmbed) {
+        embedUrl = liveEmbed;
+        isLive = true;
+        console.log('[Webcam] live stream found:', embedUrl);
+      } else {
+        console.log('[Webcam] no live stream, using day timelapse');
+      }
+    } catch(e) {
+      console.warn('[Webcam] re-fetch failed, using cached url', e);
+    }
+  }
+
+  document.getElementById('webcamModalMeta').textContent =
+    (meta || '—') + (isLive ? '  ·  🔴 LIVE' : '  ·  24h timelapse');
+
+  if (embedUrl) {
+    frame.src = embedUrl;
+  } else {
+    frame.style.display = 'none';
+    fallback.style.display = 'block';
+  }
+}
+
+function closeWebcamModal() {
+  document.getElementById('webcamModal').classList.remove('visible');
+  document.getElementById('webcamFrame').src = '';
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeWebcamModal();
+});
+
+// ── RADIO ─────────────────────────────────────────────────────────────────────
+const radioEntities = [];
+const RADIO_COLOR = '#a78bfa';
+
+function makeRadioIcon() {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+    <circle cx="8" cy="8" r="7" fill="rgba(167,139,250,0.15)" stroke="#a78bfa" stroke-width="1.2"/>
+    <circle cx="8" cy="8" r="2.5" fill="#a78bfa"/>
+    <path d="M4 4 Q8 1 12 4" stroke="#a78bfa" stroke-width="1" fill="none" opacity="0.6"/>
+    <path d="M2.5 2.5 Q8 -1 13.5 2.5" stroke="#a78bfa" stroke-width="0.8" fill="none" opacity="0.3"/>
+  </svg>`;
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+}
+
+async function fetchRadio() {
+  radioEntities.forEach(e => viewer.entities.remove(e));
+  radioEntities.length = 0;
+
+  try {
+    const res = await fetch('http://localhost:3000/radio');
+    if (!res.ok) throw new Error('Radio status ' + res.status);
+    const stations = await res.json();
+    console.log('[Radio] stations received:', stations.length);
+
+    const icon = makeRadioIcon();
+
+    stations.forEach(s => {
+      const lat = parseFloat(s.geo_lat);
+      const lon = parseFloat(s.geo_long);
+      if (isNaN(lat) || isNaN(lon)) return;
+      if (!s.url_resolved) return;
+
+      const tags = (s.tags || '').split(',').slice(0, 4).join(', ');
+
+      const entity = viewer.entities.add({
+        name: s.name,
+        position: Cesium.Cartesian3.fromDegrees(lon, lat, 0),
+        billboard: {
+          image: icon,
+          width: 16, height: 16,
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+          scaleByDistance: new Cesium.NearFarScalar(5e5, 1.2, 8e6, 0.4),
+          translucencyByDistance: new Cesium.NearFarScalar(1e6, 1.0, 1.5e7, 0.0),
+        },
+        properties: {
+          type:     'radio',
+          name:     s.name,
+          url:      s.url_resolved,
+          country:  s.country || '—',
+          tags:     tags || '—',
+          codec:    s.codec || '—',
+          bitrate:  s.bitrate || '—',
+          uuid:     s.stationuuid,
+        }
+      });
+      radioEntities.push(entity);
+    });
+
+    document.getElementById('count-radio').textContent = radioEntities.length.toLocaleString();
+    console.log('[Radio] placed:', radioEntities.length);
+  } catch(e) {
+    console.warn('[Radio] fetch failed:', e.message);
+    document.getElementById('count-radio').textContent = 'N/A';
+  }
+}
+
+// ── RADIO PLAYER (embedded in info card) ─────────────────────────────────────
+let radioPlaying = false;
+
+function buildVisualizer() {
+  const viz = document.getElementById('radioVisualizer');
+  viz.innerHTML = '';
+  const count = 24;
+  for (let i = 0; i < count; i++) {
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+    bar.style.animationDelay = `${(i / count * 0.8).toFixed(2)}s`;
+    bar.style.animationDuration = `${(0.5 + Math.random() * 0.6).toFixed(2)}s`;
+    viz.appendChild(bar);
+  }
+}
+
+function openRadioModal(props) {
+  const g = key => props[key] ? props[key].getValue() : '—';
+  const url     = g('url');
+  const codec   = g('codec');
+  const bitrate = g('bitrate');
+
+  // Stop any currently playing stream
+  closeRadioModal();
+
+  // Inject player into the info card's cardFields (already populated with station rows)
+  const fields = document.getElementById('cardFields');
+
+  const player = document.createElement('div');
+  player.id = 'radioPlayerInCard';
+  player.innerHTML = `
+    <div id="radioVisualizer" class="paused"></div>
+    <div id="radioControls">
+      <button id="radioPlayBtn" onclick="toggleRadioPlay()">▶</button>
+      <span id="radioStatus">${codec} · ${bitrate}kbps</span>
+    </div>`;
+  fields.appendChild(player);
+
+  buildVisualizer();
+
+  const audio = document.getElementById('radioAudio');
+  audio.src = url;
+  audio.load();
+  radioPlaying = false;
+
+  // Auto-play
+  toggleRadioPlay();
+}
+
+function toggleRadioPlay() {
+  const audio  = document.getElementById('radioAudio');
+  const btn    = document.getElementById('radioPlayBtn');
+  const status = document.getElementById('radioStatus');
+  const viz    = document.getElementById('radioVisualizer');
+  if (!audio || !btn) return;
+
+  if (radioPlaying) {
+    audio.pause();
+    radioPlaying = false;
+    btn.textContent = '▶';
+    viz.classList.add('paused');
+  } else {
+    status.textContent = 'CONNECTING...';
+    audio.play().then(() => {
+      radioPlaying = true;
+      btn.textContent = '⏸';
+      status.textContent = 'LIVE';
+      viz.classList.remove('paused');
+    }).catch(e => {
+      status.textContent = 'FAILED';
+      console.warn('[Radio] play error:', e.message);
+    });
+  }
+}
+
+function closeRadioModal() {
+  const audio = document.getElementById('radioAudio');
+  if (audio) { audio.pause(); audio.src = ''; }
+  radioPlaying = false;
+  // Remove embedded player if present
+  const p = document.getElementById('radioPlayerInCard');
+  if (p) p.remove();
+  const viz = document.getElementById('radioVisualizer');
+  if (viz) viz.classList.add('paused');
+}
+
+async function init() {
+  setLoadStatus('Initializing imagery...');
+
+  // Wait for Cesium's first render before setting map style
+  // This prevents "Zoom Level Not Supported" on the default layer
+  await new Promise(resolve => {
+    const removeListener = viewer.scene.postRender.addEventListener(() => {
+      removeListener();
+      resolve();
+    });
+  });
+
+  await setMapStyle('night', false);
+
+  // Re-apply base imagery after a short delay to fix "Zoom Level Not Supported"
+  // Uses replaceBaseLayer to avoid disrupting the weather tile provider
+  setTimeout(() => {
+    const style = MAP_STYLES['night'];
+    const provider = new Cesium.UrlTemplateImageryProvider({
+      url: style.url,
+      credit: style.credit,
+      minimumLevel: style.minimumLevel ?? 0,
+      maximumLevel: style.maximumLevel ?? 19,
+    });
+    if (activeBaseLayer) {
+      viewer.imageryLayers.remove(activeBaseLayer, true);
+    }
+    activeBaseLayer = viewer.imageryLayers.addImageryProvider(provider);
+    viewer.imageryLayers.lowerToBottom(activeBaseLayer);
+    activeBaseLayer.brightness = style.brightness;
+    activeBaseLayer.saturation = style.saturation;
+    activeBaseLayer.contrast   = style.contrast;
+    activeBaseLayer.gamma      = style.gamma;
+  }, 1500);
+
+  // Weather radar is loaded inside setMapStyle() and re-layered on each style switch
+
+  // Show globe immediately, load all layers in background
+  setLoadStatus('Ready.');
+  await new Promise(r => setTimeout(r, 300));
+  hideLoader();
+
+  // Load all layers concurrently — nothing blocks the globe appearing
+  // Fast/light layers first — these appear quickly and let spin establish
+  initSatellites();
+  fetchFlights();
+  initShips();
+  fetchDatacenters();
+  fetchNuclear();
+  fetchQuakes();
+  fetchGdeltEvents();
+  initBuoys();
+  fetchWebcams();
+  initWeather();
+
+  // Heavy layers deferred — large datasets that would choke startup rendering
+  // Staggered so they don't all hit the main thread simultaneously
+  setTimeout(() => fetchFaults(),       3000);
+  setTimeout(() => fetchCables(),       4500);
+  setTimeout(() => fetchWildfires(),    5500);
+  setTimeout(() => fetchPowerPlants(),  7000);
+  setTimeout(() => fetchRadio(),        8500);
+
+  // Refresh flights every 60s (OpenSky rate limit)
+  setInterval(fetchFlights, 60000);
+}
+
+// ── SEARCH ────────────────────────────────────────────────────────────────────
+(function() {
+  const input   = document.getElementById('searchInput');
+  const results = document.getElementById('searchResults');
+  const kbd     = document.getElementById('searchKbd');
+  let debounce, activeIdx = -1, currentItems = [];
+
+  // ⌘K / Ctrl+K to focus
+  document.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+      input.focus();
+      input.select();
+    }
+    if (e.key === 'Escape') { input.blur(); hideResults(); }
+  });
+
+  input.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      activeIdx = Math.min(activeIdx + 1, currentItems.length - 1);
+      renderActive();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      activeIdx = Math.max(activeIdx - 1, 0);
+      renderActive();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const idx = activeIdx >= 0 ? activeIdx : 0;
+      if (currentItems[idx]) flyTo(currentItems[idx]);
+    }
+  });
+
+  input.addEventListener('input', () => {
+    clearTimeout(debounce);
+    const q = input.value.trim();
+    if (!q) { hideResults(); return; }
+    debounce = setTimeout(() => geocode(q), 280);
+  });
+
+  input.addEventListener('focus', () => {
+    if (currentItems.length) results.classList.add('visible');
+  });
+
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#searchWrap')) hideResults();
+  });
+
+  // Search live flights and ships for callsign/MMSI matches
+  function searchEntities(q) {
+    const ql = q.toLowerCase().replace(/\s/g, '');
+    const matches = [];
+
+    // Search flights by callsign or ICAO
+    flightEntities.forEach(e => {
+      const props = e.properties;
+      if (!props) return;
+      const callsign = (props.callsign?.getValue() || '').toLowerCase().replace(/\s/g, '');
+      const icao     = (props.icao?.getValue()     || '').toLowerCase();
+      if (callsign.includes(ql) || icao.includes(ql)) {
+        matches.push({
+          _entity: e,
+          _type: 'flight',
+          display_name: props.callsign?.getValue()?.trim() || icao.toUpperCase(),
+          _subtype: props.country?.getValue() || '',
+        });
+      }
+    });
+
+    // Search ships by MMSI or name
+    shipEntities.forEach(e => {
+      const props = e.properties;
+      if (!props) return;
+      const mmsi = (props.mmsi?.getValue() || '').toLowerCase();
+      const name = (e.name || '').toLowerCase();
+      if (mmsi.includes(ql) || name.includes(ql)) {
+        matches.push({
+          _entity: e,
+          _type: 'ship',
+          display_name: e.name || mmsi,
+          _subtype: props.shipType?.getValue() || 'vessel',
+        });
+      }
+    });
+
+    // Search satellites by name
+    satelliteEntities.forEach(e => {
+      const name = (e.name || '').toLowerCase().replace(/\s/g, '');
+      if (name.includes(ql)) {
+        matches.push({
+          _entity: e,
+          _type: 'satellite',
+          display_name: e.name,
+          _subtype: 'satellite',
+        });
+      }
+    });
+
+    return matches.slice(0, 6);
+  }
+
+  async function geocode(q) {
+    // First check live entities
+    const entityMatches = searchEntities(q);
+
+    // Then geocode places (run in parallel)
+    let placeMatches = [];
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=4&addressdetails=1`;
+      const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+      placeMatches = await res.json();
+    } catch(e) { /* places unavailable */ }
+
+    const combined = [...entityMatches, ...placeMatches];
+    currentItems = combined;
+    activeIdx = -1;
+    if (combined.length) renderResults(combined);
+    else showEmpty('No results found');
+  }
+
+  function renderResults(items) {
+    results.innerHTML = '';
+    if (!items.length) { showEmpty('No results found'); return; }
+    items.forEach((item, i) => {
+      const el = document.createElement('div');
+      el.className = 'search-result';
+      let name, type;
+      if (item._entity) {
+        // Live entity result
+        name = item.display_name;
+        type = item._type === 'flight'   ? '✈ '  + (item._subtype || 'flight')
+             : item._type === 'ship'     ? '⛵ '  + (item._subtype || 'ship')
+             : item._type === 'satellite'? '🛰 satellite'
+             : item._subtype || '';
+      } else {
+        name = item.display_name.split(',').slice(0, 2).join(',');
+        type = item.type || item.class || '';
+      }
+      el.innerHTML = `<span class="result-name">${name}</span><span class="result-type">${type}</span>`;
+      el.addEventListener('click', () => flyTo(item));
+      el.addEventListener('mouseenter', () => { activeIdx = i; renderActive(); });
+      results.appendChild(el);
+    });
+    results.classList.add('visible');
+  }
+
+  function renderActive() {
+    document.querySelectorAll('.search-result').forEach((el, i) => {
+      el.classList.toggle('active', i === activeIdx);
+    });
+  }
+
+  function showEmpty(msg) {
+    results.innerHTML = `<div class="search-empty">${msg}</div>`;
+    results.classList.add('visible');
+  }
+
+  function hideResults() {
+    results.classList.remove('visible');
+  }
+
+  function flyTo(item) {
+    // Entity result — track it
+    if (item._entity) {
+      trackEntity(item._entity);
+      input.value = item.display_name;
+      hideResults();
+      input.blur();
+      return;
+    }
+
+    // Place result — fly to coordinates
+    const lat = parseFloat(item.lat);
+    const lon = parseFloat(item.lon);
+    const bb  = item.boundingbox;
+
+    let height = 500000;
+    if (bb) {
+      const latSpan = Math.abs(parseFloat(bb[1]) - parseFloat(bb[0]));
+      const lonSpan = Math.abs(parseFloat(bb[3]) - parseFloat(bb[2]));
+      const span = Math.max(latSpan, lonSpan);
+      height = Math.max(5000, Math.min(8000000, span * 111000 * 1.5));
+    }
+
+    viewer.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(lon, lat, height),
+      orientation: { heading: 0, pitch: Cesium.Math.toRadians(-90), roll: 0 },
+      duration: 2.0,
+      easingFunction: Cesium.EasingFunction.CUBIC_IN_OUT,
+    });
+
+    input.value = item.display_name.split(',').slice(0, 2).join(',').trim();
+    hideResults();
+    input.blur();
+  }
+})();
+
+init();
+</script>
+</body>
+</html>

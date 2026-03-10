@@ -1,0 +1,39 @@
+server {
+    server_name your.domain.com www.your.domain.com;
+
+    root /var/www/vigil;
+    index vigil.html;
+
+    location / {
+        try_files $uri $uri/ /vigil.html;
+    }
+
+    location ~ ^/(flights|celestrak|webcams|faults|nuclear|powerplants|firms|quakes|buoys|datacenters|cables|landing-points|gdelt|openflights|radio|rainviewer|weather|gpsjam) {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+    }
+
+    location /ais-ws {
+        proxy_pass http://localhost:3001;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600;
+    }
+
+    # SSL managed by Certbot — run: certbot --nginx -d your.domain.com
+    listen 443 ssl;
+    ssl_certificate /etc/letsencrypt/live/your.domain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/your.domain.com/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+}
+
+server {
+    listen 80;
+    server_name your.domain.com www.your.domain.com;
+    return 301 https://$host$request_uri;
+}

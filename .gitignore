@@ -1,0 +1,17 @@
+# Environment / secrets
+.env
+
+# Node
+node_modules/
+npm-debug.log*
+
+# PM2
+.pm2/
+
+# Cache files written by proxy.js at runtime
+cache/
+*.cache
+
+# OS
+.DS_Store
+Thumbs.db
