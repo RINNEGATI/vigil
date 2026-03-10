@@ -4,7 +4,7 @@ A live Earth intelligence globe. Real-time flights, satellites, ships, wildfires
 
 **Live at [vigil.earth](https://vigil.earth)**
 
-![VIGIL Globe](https://vigil.earth/preview.png](https://github.com/RINNEGATI/vigil/blob/main/preview.png)
+![VIGIL Globe](https://github.com/RINNEGATI/vigil/blob/main/preview.png)
 
 ---
 
